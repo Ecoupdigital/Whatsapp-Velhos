@@ -9,6 +9,7 @@ import {
   Calendar,
   Clock,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn, formatDate } from "@/lib/utils";
@@ -170,6 +171,26 @@ export default function JogosPage() {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleDelete = async (id: number) => {
+    if (deletingId === id) {
+      // Second click = confirm
+      try {
+        await api.delete(`/jogos/${id}`);
+        toast.success("Jogo excluido");
+        setDeletingId(null);
+        fetchData();
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao excluir");
+      }
+    } else {
+      // First click = ask confirmation
+      setDeletingId(id);
+      setTimeout(() => setDeletingId(null), 3000); // Reset after 3s
+    }
+  };
+
   const updateField = <K extends keyof JogoForm>(key: K, value: JogoForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
@@ -319,18 +340,28 @@ export default function JogosPage() {
                           >
                             {jogo.tipo}
                           </span>
-                          {/* Edit button */}
-                          <button
-                            onClick={() => openEdit(jogo)}
-                            className={cn(
-                              "h-7 w-7 rounded-lg flex items-center justify-center",
-                              "text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary",
-                              "sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200"
-                            )}
-                            title="Editar jogo"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
+                          {/* Edit & Delete buttons */}
+                          <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200">
+                            <button
+                              onClick={() => openEdit(jogo)}
+                              className="h-7 w-7 rounded-lg flex items-center justify-center text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary transition-colors"
+                              title="Editar jogo"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(jogo.id)}
+                              className={cn(
+                                "h-7 w-7 rounded-lg flex items-center justify-center transition-colors",
+                                deletingId === jogo.id
+                                  ? "bg-red-500/20 text-red-400"
+                                  : "text-txt-tertiary hover:text-red-400 hover:bg-red-500/10"
+                              )}
+                              title={deletingId === jogo.id ? "Clique de novo para confirmar" : "Excluir jogo"}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
 
