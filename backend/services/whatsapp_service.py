@@ -17,9 +17,10 @@ async def get_instance_status() -> dict:
                 timeout=10,
             )
             data = resp.json()
+            instance = data.get("instance", data)
             return {
-                "connected": data.get("status") == "connected" or data.get("connected", False),
-                "phone_number": data.get("phone_number", "555195877046"),
+                "connected": instance.get("status") == "connected",
+                "phone_number": instance.get("owner", "555195877046"),
             }
         except Exception as e:
             log.error(f"Erro ao verificar status WhatsApp: {e}")

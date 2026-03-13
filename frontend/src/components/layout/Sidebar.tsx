@@ -49,7 +49,7 @@ const navSections: NavSection[] = [
     items: [
       { label: "Eventos", href: "/eventos", icon: Calendar },
       { label: "Jogos", href: "/jogos", icon: Trophy },
-      { label: "Cartoes de Baile", href: "/cartoes-baile", icon: Ticket },
+      { label: "Cartoes de Baile", href: "/cartoes", icon: Ticket },
     ],
   },
   {
