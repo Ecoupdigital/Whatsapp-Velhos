@@ -146,7 +146,7 @@ function QuickPayPopover({ mensalidade, onConfirm, onClose }: QuickPayProps) {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9, y: -8 }}
       transition={{ duration: 0.2 }}
-      className="absolute right-0 top-full mt-2 z-50 w-72 bg-surface-elevated border border-border rounded-lg shadow-card p-4 space-y-4"
+      className="absolute right-0 top-full mt-2 z-[110] w-72 bg-surface-elevated border border-border rounded-lg shadow-card p-4 space-y-4"
     >
       <div className="flex items-center justify-between">
         <h4 className="font-display text-sm uppercase tracking-wider text-txt-primary">

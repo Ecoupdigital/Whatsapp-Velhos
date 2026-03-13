@@ -325,7 +325,7 @@ export default function JogosPage() {
                             className={cn(
                               "h-7 w-7 rounded-lg flex items-center justify-center",
                               "text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary",
-                              "opacity-0 group-hover:opacity-100 transition-all duration-200"
+                              "sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200"
                             )}
                             title="Editar jogo"
                           >

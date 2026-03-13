@@ -228,7 +228,7 @@ export default function WhatsAppPage() {
         jogador_ids: selectedJogadores,
         texto: msgText,
       };
-      await api.post("/whatsapp/enviar", body);
+      await api.post("/mensagens/enviar", body);
       toast.success("Mensagem enviada com sucesso");
       setSendModalOpen(false);
       setSelectedJogadores([]);

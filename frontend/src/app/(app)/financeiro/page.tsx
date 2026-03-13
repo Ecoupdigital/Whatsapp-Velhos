@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   DollarSign,
   TrendingUp,
   TrendingDown,
   Plus,
-  X,
   Trash2,
   ChevronDown,
 } from "lucide-react";
@@ -23,6 +22,7 @@ import {
 import toast from "react-hot-toast";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import type {
   TransacaoOut,
   TransacaoCreate,
@@ -545,201 +545,169 @@ export default function FinanceiroPage() {
       {/* ------------------------------------------------------------------ */}
       {/* New / Edit Transaction Modal                                        */}
       {/* ------------------------------------------------------------------ */}
-      <AnimatePresence>
-        {modalOpen && (
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-            onClick={() => setModalOpen(false)}
-          >
-            <motion.div
-              key="modal"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-surface-card border border-border rounded-xl shadow-card w-full max-w-lg"
-            >
-              {/* Modal header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
-                <h2 className="font-display text-xl uppercase tracking-wide text-txt-primary">
-                  {editingTransaction ? "Editar Transacao" : "Nova Transacao"}
-                </h2>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} size="lg">
+        <ModalHeader>
+          {editingTransaction ? "Editar Transacao" : "Nova Transacao"}
+        </ModalHeader>
+
+        <ModalBody className="space-y-5">
+          {/* Tipo toggle */}
+          <div>
+            <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
+              Tipo
+            </label>
+            <div className="flex rounded-lg overflow-hidden border border-border">
+              {(["entrada", "saida"] as const).map((tipo) => (
                 <button
-                  onClick={() => setModalOpen(false)}
-                  className="text-txt-tertiary hover:text-txt-primary transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Modal body */}
-              <div className="px-6 py-5 space-y-5">
-                {/* Tipo toggle */}
-                <div>
-                  <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
-                    Tipo
-                  </label>
-                  <div className="flex rounded-lg overflow-hidden border border-border">
-                    {(["entrada", "saida"] as const).map((tipo) => (
-                      <button
-                        key={tipo}
-                        type="button"
-                        onClick={() => setFormData((f) => ({ ...f, tipo }))}
-                        className={cn(
-                          "flex-1 px-4 py-2.5 text-sm font-body font-semibold capitalize transition-colors",
-                          formData.tipo === tipo
-                            ? tipo === "entrada"
-                              ? "bg-green-600 text-white"
-                              : "bg-red-600 text-white"
-                            : "bg-surface-tertiary text-txt-secondary hover:text-txt-primary"
-                        )}
-                      >
-                        {tipo === "entrada" ? "Entrada" : "Saida"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Categoria */}
-                <div>
-                  <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
-                    Categoria
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={formData.categoria}
-                      onChange={(e) =>
-                        setFormData((f) => ({ ...f, categoria: e.target.value }))
-                      }
-                      className="w-full appearance-none bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 pr-8 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
-                    >
-                      {CATEGORIAS.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={14}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-tertiary pointer-events-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Descricao */}
-                <div>
-                  <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
-                    Descricao
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.descricao || ""}
-                    onChange={(e) =>
-                      setFormData((f) => ({ ...f, descricao: e.target.value }))
-                    }
-                    placeholder="Descricao da transacao"
-                    className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-body text-txt-primary placeholder:text-txt-tertiary focus:outline-none focus:border-brand-red transition-colors"
-                  />
-                </div>
-
-                {/* Valor + Data row */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
-                      Valor (R$)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.valor || ""}
-                      onChange={(e) =>
-                        setFormData((f) => ({
-                          ...f,
-                          valor: parseFloat(e.target.value) || 0,
-                        }))
-                      }
-                      placeholder="0,00"
-                      className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-mono text-txt-primary placeholder:text-txt-tertiary focus:outline-none focus:border-brand-red transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
-                      Data
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.data}
-                      onChange={(e) =>
-                        setFormData((f) => ({ ...f, data: e.target.value }))
-                      }
-                      className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal footer */}
-              <div className="flex items-center justify-between px-6 py-4 border-t border-border-subtle">
-                <div>
-                  {editingTransaction && (
-                    <>
-                      {deleteConfirm === editingTransaction.id ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-red-400 font-body">Confirmar exclusao?</span>
-                          <button
-                            onClick={() => handleDelete(editingTransaction.id)}
-                            className="text-xs font-body font-semibold text-red-400 hover:text-red-300 transition-colors"
-                          >
-                            Sim, excluir
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(null)}
-                            className="text-xs font-body text-txt-tertiary hover:text-txt-secondary transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeleteConfirm(editingTransaction.id)}
-                          className="flex items-center gap-1.5 text-sm font-body text-red-400 hover:text-red-300 transition-colors"
-                        >
-                          <Trash2 size={14} />
-                          Excluir
-                        </button>
-                      )}
-                    </>
+                  key={tipo}
+                  type="button"
+                  onClick={() => setFormData((f) => ({ ...f, tipo }))}
+                  className={cn(
+                    "flex-1 px-4 py-2.5 text-sm font-body font-semibold capitalize transition-colors",
+                    formData.tipo === tipo
+                      ? tipo === "entrada"
+                        ? "bg-green-600 text-white"
+                        : "bg-red-600 text-white"
+                      : "bg-surface-tertiary text-txt-secondary hover:text-txt-primary"
                   )}
-                </div>
-                <div className="flex items-center gap-3">
+                >
+                  {tipo === "entrada" ? "Entrada" : "Saida"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Categoria */}
+          <div>
+            <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
+              Categoria
+            </label>
+            <div className="relative">
+              <select
+                value={formData.categoria}
+                onChange={(e) =>
+                  setFormData((f) => ({ ...f, categoria: e.target.value }))
+                }
+                className="w-full appearance-none bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 pr-8 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
+              >
+                {CATEGORIAS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-tertiary pointer-events-none"
+              />
+            </div>
+          </div>
+
+          {/* Descricao */}
+          <div>
+            <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
+              Descricao
+            </label>
+            <input
+              type="text"
+              value={formData.descricao || ""}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, descricao: e.target.value }))
+              }
+              placeholder="Descricao da transacao"
+              className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-body text-txt-primary placeholder:text-txt-tertiary focus:outline-none focus:border-brand-red transition-colors"
+            />
+          </div>
+
+          {/* Valor + Data row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
+                Valor (R$)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.valor || ""}
+                onChange={(e) =>
+                  setFormData((f) => ({
+                    ...f,
+                    valor: parseFloat(e.target.value) || 0,
+                  }))
+                }
+                placeholder="0,00"
+                className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-mono text-txt-primary placeholder:text-txt-tertiary focus:outline-none focus:border-brand-red transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
+                Data
+              </label>
+              <input
+                type="date"
+                value={formData.data}
+                onChange={(e) =>
+                  setFormData((f) => ({ ...f, data: e.target.value }))
+                }
+                className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
+              />
+            </div>
+          </div>
+        </ModalBody>
+
+        <ModalFooter className="justify-between">
+          <div>
+            {editingTransaction && (
+              <>
+                {deleteConfirm === editingTransaction.id ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-red-400 font-body">Confirmar exclusao?</span>
+                    <button
+                      onClick={() => handleDelete(editingTransaction.id)}
+                      className="text-xs font-body font-semibold text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      Sim, excluir
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(null)}
+                      className="text-xs font-body text-txt-tertiary hover:text-txt-secondary transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    onClick={() => setModalOpen(false)}
-                    className="px-4 py-2 text-sm font-body text-txt-secondary hover:text-txt-primary transition-colors"
+                    onClick={() => setDeleteConfirm(editingTransaction.id)}
+                    className="flex items-center gap-1.5 text-sm font-body text-red-400 hover:text-red-300 transition-colors"
                   >
-                    Cancelar
+                    <Trash2 size={14} />
+                    Excluir
                   </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center gap-2 bg-brand-red hover:bg-brand-red-hover disabled:opacity-50 text-white font-body font-semibold px-5 py-2 rounded-lg shadow-brand transition-colors"
-                  >
-                    {saving && (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    )}
-                    {editingTransaction ? "Salvar" : "Criar"}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setModalOpen(false)}
+              className="px-4 py-2 text-sm font-body text-txt-secondary hover:text-txt-primary transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 bg-brand-red hover:bg-brand-red-hover disabled:opacity-50 text-white font-body font-semibold px-5 py-2 rounded-lg shadow-brand transition-colors"
+            >
+              {saving && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
+              {editingTransaction ? "Salvar" : "Criar"}
+            </button>
+          </div>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

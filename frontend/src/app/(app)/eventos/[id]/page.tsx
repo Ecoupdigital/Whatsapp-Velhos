@@ -148,7 +148,8 @@ export default function EventoDetailPage() {
 
   const handleToggleStatus = async (part: ParticipanteOut, newStatus: string) => {
     try {
-      await api.put(`/eventos/${eventoId}/participantes/${part.id}`, {
+      await api.post(`/eventos/${eventoId}/participantes`, {
+        jogador_id: part.jogador_id,
         status: newStatus,
       });
       setParticipantes((prev) =>
@@ -163,7 +164,8 @@ export default function EventoDetailPage() {
   const handleTogglePago = async (part: ParticipanteOut) => {
     const newPago = part.pago === 1 ? 0 : 1;
     try {
-      await api.put(`/eventos/${eventoId}/participantes/${part.id}`, {
+      await api.post(`/eventos/${eventoId}/participantes`, {
+        jogador_id: part.jogador_id,
         pago: newPago,
       });
       setParticipantes((prev) =>
