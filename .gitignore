@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.db
+node_modules/
+.next/
+.env
+*.log
+screenshots/
+test-app.mjs
+.mcp.json
