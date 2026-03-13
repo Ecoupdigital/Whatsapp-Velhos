@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useCallback, useRef, type ReactNode, type MouseEvent } from "react";
+import {
+  useEffect,
+  useCallback,
+  useRef,
+  useState,
+  type ReactNode,
+  type MouseEvent,
+} from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,6 +29,17 @@ const sizeMap = {
   xl: "max-w-xl",
 };
 
+function ModalPortal({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+}
+
 function Modal({
   open,
   onClose,
@@ -30,6 +49,7 @@ function Modal({
   closeOnOverlay = true,
 }: ModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
+  const scrollPosRef = useRef(0);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -40,16 +60,29 @@ function Modal({
 
   useEffect(() => {
     if (open) {
-      document.addEventListener("keydown", handleKeyDown);
+      // Save scroll position and lock body
+      scrollPosRef.current = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollPosRef.current}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
       document.body.style.overflow = "hidden";
+      document.addEventListener("keydown", handleKeyDown);
     }
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      if (open) {
+        // Restore scroll position
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.right = "";
+        document.body.style.overflow = "";
+        window.scrollTo(0, scrollPosRef.current);
+      }
     };
   }, [open, handleKeyDown]);
 
-  // Close only when clicking the backdrop itself, not its children
   const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
     if (closeOnOverlay && e.target === backdropRef.current) {
       onClose();
@@ -57,66 +90,68 @@ function Modal({
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          ref={backdropRef}
-          className="fixed inset-0 z-[100] overflow-y-auto bg-black/60 backdrop-blur-sm"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          onClick={handleBackdropClick}
-        >
-          <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-                y: 0,
-                transition: { type: "spring", stiffness: 400, damping: 30 },
-              }}
-              exit={{
-                opacity: 0,
-                scale: 0.95,
-                y: 20,
-                transition: { duration: 0.15 },
-              }}
-              className={cn(
-                "relative w-full my-8",
-                sizeMap[size],
-                "bg-surface-elevated",
-                "border border-border",
-                "rounded-xl shadow-2xl shadow-black/40",
-                className
-              )}
-            >
-              {/* Close button */}
-              <button
-                onClick={onClose}
+    <ModalPortal>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            ref={backdropRef}
+            className="fixed inset-0 z-[9999] overflow-y-auto bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={handleBackdropClick}
+          >
+            <div className="flex min-h-full items-center justify-center p-4">
+              <motion.div
+                role="dialog"
+                aria-modal="true"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{
+                  opacity: 1,
+                  scale: 1,
+                  y: 0,
+                  transition: { type: "spring", stiffness: 400, damping: 30 },
+                }}
+                exit={{
+                  opacity: 0,
+                  scale: 0.95,
+                  y: 20,
+                  transition: { duration: 0.15 },
+                }}
                 className={cn(
-                  "absolute top-3 right-3 z-10",
-                  "h-8 w-8 rounded-lg",
-                  "flex items-center justify-center",
-                  "text-txt-tertiary",
-                  "hover:text-txt-primary hover:bg-surface-tertiary",
-                  "transition-colors duration-150",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
+                  "relative w-full my-8",
+                  sizeMap[size],
+                  "bg-surface-elevated",
+                  "border border-border",
+                  "rounded-xl shadow-2xl shadow-black/40",
+                  className
                 )}
-                aria-label="Fechar"
               >
-                <X className="h-4 w-4" />
-              </button>
+                {/* Close button */}
+                <button
+                  onClick={onClose}
+                  className={cn(
+                    "absolute top-3 right-3 z-10",
+                    "h-8 w-8 rounded-lg",
+                    "flex items-center justify-center",
+                    "text-txt-tertiary",
+                    "hover:text-txt-primary hover:bg-surface-tertiary",
+                    "transition-colors duration-150",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
+                  )}
+                  aria-label="Fechar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
 
-              {children}
-            </motion.div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+                {children}
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </ModalPortal>
   );
 }
 
