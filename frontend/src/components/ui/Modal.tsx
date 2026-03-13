@@ -21,22 +21,6 @@ const sizeMap = {
   xl: "max-w-xl",
 };
 
-const overlayVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1 },
-};
-
-const containerVariants = {
-  hidden: { opacity: 0, scale: 0.95, y: 10 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: { type: "spring" as const, stiffness: 350, damping: 30 },
-  },
-  exit: { opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } },
-};
-
 function Modal({
   open,
   onClose,
@@ -66,57 +50,69 @@ function Modal({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 py-8 sm:py-12">
-          {/* Overlay */}
+        <>
+          {/* Overlay - fixed, covers everything */}
           <motion.div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            variants={overlayVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={closeOnOverlay ? onClose : undefined}
             aria-hidden="true"
           />
 
-          {/* Container */}
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            className={cn(
-              "relative w-full",
-              sizeMap[size],
-              "bg-surface-elevated",
-              "border border-border",
-              "rounded-xl shadow-2xl shadow-black/40",
-              "overflow-hidden",
-              className
-            )}
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
+          {/* Scroll wrapper - fixed, above overlay */}
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            style={{ pointerEvents: "none" }}
           >
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              className={cn(
-                "absolute top-3 right-3 z-10",
-                "h-8 w-8 rounded-lg",
-                "flex items-center justify-center",
-                "text-txt-tertiary",
-                "hover:text-txt-primary hover:bg-surface-tertiary",
-                "transition-colors duration-150",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
-              )}
-              aria-label="Fechar"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex min-h-full items-start justify-center p-4 py-8 sm:py-12">
+              {/* Modal container */}
+              <motion.div
+                role="dialog"
+                aria-modal="true"
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{
+                  opacity: 1,
+                  scale: 1,
+                  y: 0,
+                  transition: { type: "spring", stiffness: 350, damping: 30 },
+                }}
+                exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
+                className={cn(
+                  "relative w-full",
+                  sizeMap[size],
+                  "bg-surface-elevated",
+                  "border border-border",
+                  "rounded-xl shadow-2xl shadow-black/40",
+                  className
+                )}
+                style={{ pointerEvents: "auto" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close button */}
+                <button
+                  onClick={onClose}
+                  className={cn(
+                    "absolute top-3 right-3 z-10",
+                    "h-8 w-8 rounded-lg",
+                    "flex items-center justify-center",
+                    "text-txt-tertiary",
+                    "hover:text-txt-primary hover:bg-surface-tertiary",
+                    "transition-colors duration-150",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
+                  )}
+                  aria-label="Fechar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
 
-            {children}
-          </motion.div>
-        </div>
+                {children}
+              </motion.div>
+            </div>
+          </div>
+        </>
       )}
     </AnimatePresence>
   );
