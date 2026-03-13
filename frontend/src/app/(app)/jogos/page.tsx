@@ -52,6 +52,11 @@ function isFutureGame(jogo: JogoOut) {
   return jogo.gols_favor === 0 && jogo.gols_contra === 0;
 }
 
+function isHomeGame(jogo: JogoOut) {
+  const local = (jogo.local || "").toLowerCase();
+  return local.includes("11") || local.includes("gaucho") || local.includes("gaúcho");
+}
+
 /* ─── Form type ──────────────────────────────────────────────── */
 
 interface JogoForm {
@@ -330,73 +335,85 @@ export default function JogosPage() {
                       </div>
 
                       {/* Scoreboard */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 text-left">
-                          <p className="text-xs text-txt-tertiary font-body uppercase tracking-widest mb-1">Casa</p>
-                          <p className="text-base sm:text-lg font-display font-bold text-txt-primary uppercase tracking-wide">
-                            Velhos Parceiros
-                          </p>
-                        </div>
+                      {(() => {
+                        const home = isHomeGame(jogo);
+                        const leftTeam = home ? "Velhos Parceiros" : jogo.adversario;
+                        const rightTeam = home ? jogo.adversario : "Velhos Parceiros";
+                        const leftLabel = home ? "Mandante" : "Mandante";
+                        const rightLabel = home ? "Visitante" : "Visitante";
+                        const leftGols = home ? jogo.gols_favor : jogo.gols_contra;
+                        const rightGols = home ? jogo.gols_contra : jogo.gols_favor;
 
-                        <div className="flex-shrink-0 mx-4 sm:mx-8">
-                          {future ? (
-                            <div className="flex flex-col items-center">
-                              <div className="flex items-center gap-3">
-                                <span className="text-3xl sm:text-4xl font-display font-bold text-txt-tertiary/40">-</span>
-                                <span className="text-lg text-txt-tertiary/30 font-display">x</span>
-                                <span className="text-3xl sm:text-4xl font-display font-bold text-txt-tertiary/40">-</span>
-                              </div>
-                              <span className="mt-2 px-3 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-surface-tertiary text-txt-tertiary">
-                                A jogar
-                              </span>
+                        return (
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 text-left">
+                              <p className="text-xs text-txt-tertiary font-body uppercase tracking-widest mb-1">{leftLabel}</p>
+                              <p className={cn(
+                                "text-base sm:text-lg font-display font-bold uppercase tracking-wide",
+                                leftTeam === "Velhos Parceiros" ? "text-brand-red" : "text-txt-primary"
+                              )}>
+                                {leftTeam}
+                              </p>
                             </div>
-                          ) : (
-                            <div>
-                              <div className="flex items-center gap-2 sm:gap-4">
-                                <span
-                                  className={cn(
-                                    "text-4xl sm:text-5xl lg:text-6xl font-display font-bold tabular-nums",
-                                    jogo.gols_favor > jogo.gols_contra ? "text-emerald-400" :
-                                    jogo.gols_favor < jogo.gols_contra ? "text-red-400" : "text-yellow-400"
-                                  )}
-                                >
-                                  {jogo.gols_favor}
-                                </span>
-                                <span className="text-lg sm:text-xl text-txt-tertiary font-display font-light">x</span>
-                                <span
-                                  className={cn(
-                                    "text-4xl sm:text-5xl lg:text-6xl font-display font-bold tabular-nums",
-                                    jogo.gols_contra > jogo.gols_favor ? "text-emerald-400" :
-                                    jogo.gols_contra < jogo.gols_favor ? "text-red-400" : "text-yellow-400"
-                                  )}
-                                >
-                                  {jogo.gols_contra}
-                                </span>
-                              </div>
-                              <div className="flex justify-center mt-2">
-                                <span
-                                  className={cn(
-                                    "px-3 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest",
-                                    jogo.gols_favor > jogo.gols_contra && "bg-emerald-500/20 text-emerald-400",
-                                    jogo.gols_favor < jogo.gols_contra && "bg-red-500/20 text-red-400",
-                                    jogo.gols_favor === jogo.gols_contra && "bg-yellow-500/20 text-yellow-400"
-                                  )}
-                                >
-                                  {jogo.gols_favor > jogo.gols_contra ? "Vitoria" :
-                                   jogo.gols_favor < jogo.gols_contra ? "Derrota" : "Empate"}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
 
-                        <div className="flex-1 text-right">
-                          <p className="text-xs text-txt-tertiary font-body uppercase tracking-widest mb-1">Visitante</p>
-                          <p className="text-base sm:text-lg font-display font-bold text-txt-primary uppercase tracking-wide">
-                            {jogo.adversario}
-                          </p>
-                        </div>
-                      </div>
+                            <div className="flex-shrink-0 mx-4 sm:mx-8">
+                              {future ? (
+                                <div className="flex flex-col items-center">
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-3xl sm:text-4xl font-display font-bold text-txt-tertiary/40">-</span>
+                                    <span className="text-lg text-txt-tertiary/30 font-display">x</span>
+                                    <span className="text-3xl sm:text-4xl font-display font-bold text-txt-tertiary/40">-</span>
+                                  </div>
+                                  <span className="mt-2 px-3 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-surface-tertiary text-txt-tertiary">
+                                    {home ? "Em casa" : "Fora"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div>
+                                  <div className="flex items-center gap-2 sm:gap-4">
+                                    <span className={cn(
+                                      "text-4xl sm:text-5xl lg:text-6xl font-display font-bold tabular-nums",
+                                      leftGols > rightGols ? "text-emerald-400" :
+                                      leftGols < rightGols ? "text-red-400" : "text-yellow-400"
+                                    )}>
+                                      {leftGols}
+                                    </span>
+                                    <span className="text-lg sm:text-xl text-txt-tertiary font-display font-light">x</span>
+                                    <span className={cn(
+                                      "text-4xl sm:text-5xl lg:text-6xl font-display font-bold tabular-nums",
+                                      rightGols > leftGols ? "text-emerald-400" :
+                                      rightGols < leftGols ? "text-red-400" : "text-yellow-400"
+                                    )}>
+                                      {rightGols}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-center mt-2">
+                                    <span className={cn(
+                                      "px-3 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest",
+                                      jogo.gols_favor > jogo.gols_contra && "bg-emerald-500/20 text-emerald-400",
+                                      jogo.gols_favor < jogo.gols_contra && "bg-red-500/20 text-red-400",
+                                      jogo.gols_favor === jogo.gols_contra && "bg-yellow-500/20 text-yellow-400"
+                                    )}>
+                                      {jogo.gols_favor > jogo.gols_contra ? "Vitoria" :
+                                       jogo.gols_favor < jogo.gols_contra ? "Derrota" : "Empate"}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-1 text-right">
+                              <p className="text-xs text-txt-tertiary font-body uppercase tracking-widest mb-1">{rightLabel}</p>
+                              <p className={cn(
+                                "text-base sm:text-lg font-display font-bold uppercase tracking-wide",
+                                rightTeam === "Velhos Parceiros" ? "text-brand-red" : "text-txt-primary"
+                              )}>
+                                {rightTeam}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Mobile location */}
                       {jogo.local && (
