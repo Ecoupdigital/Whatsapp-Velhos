@@ -17,11 +17,15 @@ import {
   Eye,
   Send,
   CalendarDays,
+  Wallet,
+  Plus,
+  X,
+  Trash2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn, formatCurrency } from "@/lib/utils";
 import { api } from "@/lib/api";
-import type { UsuarioOut } from "@/types";
+import type { UsuarioOut, ContaOut, ContaCreate } from "@/types";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -525,6 +529,16 @@ export default function ConfiguracoesPage() {
   });
   const [savingEnvios, setSavingEnvios] = useState(false);
 
+  // Contas financeiras state
+  const [contasList, setContasList] = useState<ContaOut[]>([]);
+  const [loadingContas, setLoadingContas] = useState(true);
+  const [showNewConta, setShowNewConta] = useState(false);
+  const [newConta, setNewConta] = useState<ContaCreate>({ nome: "", tipo: "caixa", saldo_inicial: 0 });
+  const [savingConta, setSavingConta] = useState(false);
+  const [editingContaId, setEditingContaId] = useState<number | null>(null);
+  const [editContaName, setEditContaName] = useState("");
+  const [editContaTipo, setEditContaTipo] = useState("");
+
   /* ─── Load configs ────────────────────────────────────── */
 
   useEffect(() => {
@@ -583,7 +597,20 @@ export default function ConfiguracoesPage() {
     }
 
     loadData();
+    fetchContas();
   }, []);
+
+  async function fetchContas() {
+    setLoadingContas(true);
+    try {
+      const data = await api.get<ContaOut[]>("/contas");
+      setContasList(data);
+    } catch {
+      // silent
+    } finally {
+      setLoadingContas(false);
+    }
+  }
 
   /* ─── Save handlers ───────────────────────────────────── */
 
@@ -650,6 +677,57 @@ export default function ConfiguracoesPage() {
     } finally {
       setSavingEnvios(false);
     }
+  }
+
+  /* ─── Conta handlers ─────────────────────────────────── */
+
+  async function handleCreateConta() {
+    if (!newConta.nome.trim()) {
+      toast.error("Nome da conta e obrigatorio");
+      return;
+    }
+    setSavingConta(true);
+    try {
+      await api.post("/contas", newConta);
+      toast.success("Conta criada com sucesso");
+      setShowNewConta(false);
+      setNewConta({ nome: "", tipo: "caixa", saldo_inicial: 0 });
+      fetchContas();
+    } catch {
+      toast.error("Erro ao criar conta");
+    } finally {
+      setSavingConta(false);
+    }
+  }
+
+  async function handleToggleContaAtivo(conta: ContaOut) {
+    try {
+      await api.put(`/contas/${conta.id}`, { ativo: conta.ativo === 1 ? 0 : 1 });
+      toast.success(conta.ativo === 1 ? "Conta desativada" : "Conta ativada");
+      fetchContas();
+    } catch {
+      toast.error("Erro ao atualizar conta");
+    }
+  }
+
+  async function handleSaveContaEdit(conta: ContaOut) {
+    try {
+      await api.put(`/contas/${conta.id}`, {
+        nome: editContaName,
+        tipo: editContaTipo,
+      });
+      toast.success("Conta atualizada");
+      setEditingContaId(null);
+      fetchContas();
+    } catch {
+      toast.error("Erro ao atualizar conta");
+    }
+  }
+
+  function startEditConta(conta: ContaOut) {
+    setEditingContaId(conta.id);
+    setEditContaName(conta.nome);
+    setEditContaTipo(conta.tipo);
   }
 
   /* ─── Render ──────────────────────────────────────────── */
@@ -800,6 +878,177 @@ export default function ConfiguracoesPage() {
               )}
             </div>
           </div>
+        </Section>
+
+        {/* ── 2.5. Contas Financeiras ───────────────────────── */}
+        <Section
+          icon={<Wallet className="h-5 w-5" />}
+          title="Contas Financeiras"
+          description="Gerencie as contas para registro de pagamentos"
+        >
+          {loadingContas ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {contasList.filter((c) => c.ativo === 1).length === 0 && !showNewConta && (
+                <p className="text-sm text-txt-tertiary font-body py-3">
+                  Nenhuma conta cadastrada.
+                </p>
+              )}
+
+              {contasList
+                .filter((c) => c.ativo === 1)
+                .map((conta) => (
+                  <div
+                    key={conta.id}
+                    className="flex items-center justify-between py-3 border-b border-border-subtle last:border-b-0 gap-4"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {editingContaId === conta.id ? (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <input
+                            value={editContaName}
+                            onChange={(e) => setEditContaName(e.target.value)}
+                            className="text-sm font-body text-txt-primary bg-surface-tertiary border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-red/50 w-32"
+                            placeholder="Nome"
+                          />
+                          <select
+                            value={editContaTipo}
+                            onChange={(e) => setEditContaTipo(e.target.value)}
+                            className="text-sm font-body text-txt-primary bg-surface-tertiary border border-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+                          >
+                            <option value="caixa">Caixa</option>
+                            <option value="banco">Banco</option>
+                            <option value="dinheiro">Dinheiro</option>
+                          </select>
+                          <button
+                            onClick={() => handleSaveContaEdit(conta)}
+                            className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                            title="Salvar"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => setEditingContaId(null)}
+                            className="text-txt-tertiary hover:text-txt-primary transition-colors"
+                            title="Cancelar"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-sm font-medium text-txt-primary font-body">
+                            {conta.nome}
+                          </span>
+                          <span
+                            className={cn(
+                              "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-body border",
+                              conta.tipo === "dinheiro"
+                                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                : conta.tipo === "banco"
+                                ? "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                                : "bg-yellow-500/15 text-yellow-400 border-yellow-500/30"
+                            )}
+                          >
+                            {conta.tipo}
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="text-sm font-mono font-medium text-txt-primary">
+                        {formatCurrency(conta.saldo_atual)}
+                      </span>
+                      {editingContaId !== conta.id && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => startEditConta(conta)}
+                            className="text-txt-tertiary hover:text-txt-primary transition-colors p-1"
+                            title="Editar"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleContaAtivo(conta)}
+                            className="text-txt-tertiary hover:text-red-400 transition-colors p-1"
+                            title="Desativar"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+              {/* Inline new conta form */}
+              <AnimatePresence>
+                {showNewConta && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex items-center gap-2 py-3 border-b border-border-subtle">
+                      <input
+                        value={newConta.nome}
+                        onChange={(e) => setNewConta((p) => ({ ...p, nome: e.target.value }))}
+                        placeholder="Nome da conta"
+                        className="text-sm font-body text-txt-primary bg-surface-tertiary border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-red/50 flex-1 min-w-0"
+                        autoFocus
+                      />
+                      <select
+                        value={newConta.tipo}
+                        onChange={(e) => setNewConta((p) => ({ ...p, tipo: e.target.value }))}
+                        className="text-sm font-body text-txt-primary bg-surface-tertiary border border-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+                      >
+                        <option value="caixa">Caixa</option>
+                        <option value="banco">Banco</option>
+                        <option value="dinheiro">Dinheiro</option>
+                      </select>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={handleCreateConta}
+                        loading={savingConta}
+                      >
+                        Criar
+                      </Button>
+                      <button
+                        onClick={() => {
+                          setShowNewConta(false);
+                          setNewConta({ nome: "", tipo: "caixa", saldo_inicial: 0 });
+                        }}
+                        className="text-txt-tertiary hover:text-txt-primary transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Add button */}
+              <div className="pt-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Plus />}
+                  onClick={() => setShowNewConta(true)}
+                  disabled={showNewConta}
+                >
+                  Nova Conta
+                </Button>
+              </div>
+            </div>
+          )}
         </Section>
 
         {/* ── 3. Templates de Mensagem ─────────────────────── */}

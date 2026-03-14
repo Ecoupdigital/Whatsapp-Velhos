@@ -9,6 +9,7 @@ import {
   Plus,
   Trash2,
   ChevronDown,
+  Wallet,
 } from "lucide-react";
 import {
   BarChart,
@@ -28,6 +29,7 @@ import type {
   TransacaoCreate,
   BalancoOut,
   FluxoMensal,
+  ContaOut,
 } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +61,7 @@ const CATEGORIA_COLORS: Record<string, string> = {
 };
 
 type FilterTipo = "todas" | "entrada" | "saida";
+type FilterConta = "" | number;
 
 const DIAGONAL_CLIP = "polygon(0 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%)";
 
@@ -96,11 +99,13 @@ export default function FinanceiroPage() {
   const [balanco, setBalanco] = useState<BalancoOut | null>(null);
   const [fluxo, setFluxo] = useState<FluxoMensal[]>([]);
   const [transacoes, setTransacoes] = useState<TransacaoOut[]>([]);
+  const [contas, setContas] = useState<ContaOut[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filter state
   const [filtroTipo, setFiltroTipo] = useState<FilterTipo>("todas");
   const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [filtroConta, setFiltroConta] = useState<FilterConta>("");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
 
@@ -113,6 +118,7 @@ export default function FinanceiroPage() {
     descricao: "",
     valor: 0,
     data: new Date().toISOString().slice(0, 10),
+    conta_id: null,
   });
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
@@ -144,6 +150,7 @@ export default function FinanceiroPage() {
       const params = new URLSearchParams();
       if (filtroTipo !== "todas") params.set("tipo", filtroTipo);
       if (filtroCategoria) params.set("categoria", filtroCategoria);
+      if (filtroConta) params.set("conta_id", String(filtroConta));
       if (filtroDataInicio) params.set("data_inicio", filtroDataInicio);
       if (filtroDataFim) params.set("data_fim", filtroDataFim);
       const qs = params.toString();
@@ -152,16 +159,25 @@ export default function FinanceiroPage() {
     } catch {
       // silent
     }
-  }, [filtroTipo, filtroCategoria, filtroDataInicio, filtroDataFim]);
+  }, [filtroTipo, filtroCategoria, filtroConta, filtroDataInicio, filtroDataFim]);
+
+  const fetchContas = useCallback(async () => {
+    try {
+      const data = await api.get<ContaOut[]>("/contas");
+      setContas(data);
+    } catch {
+      // silent
+    }
+  }, []);
 
   useEffect(() => {
     async function init() {
       setLoading(true);
-      await Promise.all([fetchBalanco(), fetchFluxo(), fetchTransacoes()]);
+      await Promise.all([fetchBalanco(), fetchFluxo(), fetchTransacoes(), fetchContas()]);
       setLoading(false);
     }
     init();
-  }, [fetchBalanco, fetchFluxo, fetchTransacoes]);
+  }, [fetchBalanco, fetchFluxo, fetchTransacoes, fetchContas]);
 
   // ---------------------------------------------------------------------------
   // Chart data
@@ -188,12 +204,14 @@ export default function FinanceiroPage() {
 
   function openNewModal() {
     setEditingTransaction(null);
+    const defaultConta = contas.find((c) => c.ativo === 1);
     setFormData({
       tipo: "entrada",
       categoria: "mensalidade",
       descricao: "",
       valor: 0,
       data: new Date().toISOString().slice(0, 10),
+      conta_id: defaultConta?.id ?? null,
     });
     setDeleteConfirm(null);
     setModalOpen(true);
@@ -207,6 +225,7 @@ export default function FinanceiroPage() {
       descricao: t.descricao || "",
       valor: t.valor,
       data: t.data,
+      conta_id: t.conta_id ?? null,
     });
     setDeleteConfirm(null);
     setModalOpen(true);
@@ -255,6 +274,13 @@ export default function FinanceiroPage() {
   function categoriaLabel(cat: string) {
     return CATEGORIAS.find((c) => c.value === cat)?.label || cat;
   }
+
+  function contaNome(contaId: number | null): string {
+    if (!contaId) return "";
+    return contas.find((c) => c.id === contaId)?.nome ?? "";
+  }
+
+  const activeContas = contas.filter((c) => c.ativo === 1);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -351,6 +377,31 @@ export default function FinanceiroPage() {
       </div>
 
       {/* ------------------------------------------------------------------ */}
+      {/* Saldo por Conta                                                      */}
+      {/* ------------------------------------------------------------------ */}
+      {balanco?.saldos_por_conta && balanco.saldos_por_conta.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {balanco.saldos_por_conta.map((sc) => (
+            <div
+              key={sc.nome}
+              className="flex items-center gap-2 bg-surface-tertiary border border-border-subtle rounded-lg px-3 py-2"
+            >
+              <Wallet size={14} className="text-txt-tertiary" />
+              <span className="text-xs font-body text-txt-secondary">{sc.nome}:</span>
+              <span
+                className={cn(
+                  "text-sm font-mono font-semibold",
+                  sc.saldo >= 0 ? "text-green-400" : "text-red-400"
+                )}
+              >
+                {formatCurrency(sc.saldo)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
       {/* Fluxo Mensal Chart                                                  */}
       {/* ------------------------------------------------------------------ */}
       <motion.div
@@ -436,6 +487,28 @@ export default function FinanceiroPage() {
           />
         </div>
 
+        {/* Conta dropdown */}
+        {contas.length > 0 && (
+          <div className="relative w-full sm:w-auto">
+            <select
+              value={filtroConta}
+              onChange={(e) => setFiltroConta(e.target.value ? Number(e.target.value) : "")}
+              className="w-full sm:w-auto appearance-none bg-surface-tertiary border border-border rounded-lg px-4 py-2 pr-8 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors cursor-pointer"
+            >
+              <option value="">Todas contas</option>
+              {contas.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-txt-tertiary pointer-events-none"
+            />
+          </div>
+        )}
+
         {/* Date range */}
         <div className="grid grid-cols-2 sm:flex gap-3 w-full sm:w-auto">
           <input
@@ -454,11 +527,12 @@ export default function FinanceiroPage() {
           />
         </div>
 
-        {(filtroTipo !== "todas" || filtroCategoria || filtroDataInicio || filtroDataFim) && (
+        {(filtroTipo !== "todas" || filtroCategoria || filtroConta || filtroDataInicio || filtroDataFim) && (
           <button
             onClick={() => {
               setFiltroTipo("todas");
               setFiltroCategoria("");
+              setFiltroConta("");
               setFiltroDataInicio("");
               setFiltroDataFim("");
             }}
@@ -492,6 +566,9 @@ export default function FinanceiroPage() {
                 <th className="text-left px-5 py-3 text-xs font-body uppercase tracking-wider text-txt-tertiary">
                   Categoria
                 </th>
+                <th className="text-left px-5 py-3 text-xs font-body uppercase tracking-wider text-txt-tertiary">
+                  Conta
+                </th>
                 <th className="text-right px-5 py-3 text-xs font-body uppercase tracking-wider text-txt-tertiary">
                   Valor
                 </th>
@@ -501,7 +578,7 @@ export default function FinanceiroPage() {
               {transacoes.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="text-center py-12 text-txt-tertiary font-body"
                   >
                     Nenhuma transacao encontrada
@@ -529,6 +606,9 @@ export default function FinanceiroPage() {
                       >
                         {categoriaLabel(t.categoria)}
                       </span>
+                    </td>
+                    <td className="px-5 py-4 text-sm font-body text-txt-secondary whitespace-nowrap">
+                      {contaNome(t.conta_id) || "-"}
                     </td>
                     <td
                       className={cn(
@@ -570,7 +650,7 @@ export default function FinanceiroPage() {
                   <p className="text-sm font-body text-txt-primary truncate">
                     {t.descricao || categoriaLabel(t.categoria)}
                   </p>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-xs font-body text-txt-tertiary">
                       {formatDate(t.data)}
                     </span>
@@ -582,6 +662,11 @@ export default function FinanceiroPage() {
                     >
                       {categoriaLabel(t.categoria)}
                     </span>
+                    {contaNome(t.conta_id) && (
+                      <span className="inline-block px-2 py-0.5 rounded-full text-xs font-body border bg-surface-tertiary text-txt-secondary border-border-subtle">
+                        {contaNome(t.conta_id)}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <span
@@ -659,6 +744,38 @@ export default function FinanceiroPage() {
               />
             </div>
           </div>
+
+          {/* Conta */}
+          {activeContas.length > 0 && (
+            <div>
+              <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
+                Conta
+              </label>
+              <div className="relative">
+                <select
+                  value={formData.conta_id ?? ""}
+                  onChange={(e) =>
+                    setFormData((f) => ({
+                      ...f,
+                      conta_id: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                  className="w-full appearance-none bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 pr-8 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
+                >
+                  <option value="">Selecionar conta...</option>
+                  {activeContas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome} ({c.tipo})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-tertiary pointer-events-none"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Descricao */}
           <div>

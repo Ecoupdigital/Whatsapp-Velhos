@@ -86,6 +86,7 @@ class MensalidadeUpdate(BaseModel):
     data_pagamento: Optional[str] = None
     forma_pagto: Optional[str] = None
     observacoes: Optional[str] = None
+    conta_id: Optional[int] = None
 
 class MensalidadeOut(BaseModel):
     id: int
@@ -117,6 +118,37 @@ class MensalidadeResumo(BaseModel):
     valor_arrecadado: float
 
 
+# === Contas ===
+
+class ContaCreate(BaseModel):
+    nome: str
+    tipo: str = "dinheiro"  # dinheiro | banco
+    saldo_inicial: float = 0
+
+class ContaUpdate(BaseModel):
+    nome: Optional[str] = None
+    tipo: Optional[str] = None
+    saldo_inicial: Optional[float] = None
+    ativo: Optional[int] = None
+
+class ContaOut(BaseModel):
+    id: int
+    nome: str
+    tipo: str
+    saldo_inicial: float
+    ativo: int
+    saldo_atual: float = 0
+    created_at: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+class ContaSaldo(BaseModel):
+    nome: str
+    tipo: str
+    saldo: float
+
+
 # === Transacoes ===
 
 class TransacaoCreate(BaseModel):
@@ -127,6 +159,7 @@ class TransacaoCreate(BaseModel):
     data: str
     jogador_id: Optional[int] = None
     evento_id: Optional[int] = None
+    conta_id: Optional[int] = None
 
 class TransacaoUpdate(BaseModel):
     tipo: Optional[str] = None
@@ -136,6 +169,7 @@ class TransacaoUpdate(BaseModel):
     data: Optional[str] = None
     jogador_id: Optional[int] = None
     evento_id: Optional[int] = None
+    conta_id: Optional[int] = None
 
 class TransacaoOut(BaseModel):
     id: int
@@ -146,6 +180,7 @@ class TransacaoOut(BaseModel):
     data: str
     jogador_id: Optional[int]
     evento_id: Optional[int]
+    conta_id: Optional[int] = None
     comprovante: Optional[str]
     created_at: Optional[str]
 
@@ -157,6 +192,7 @@ class BalancoOut(BaseModel):
     entradas_mes: float
     saidas_mes: float
     variacao_percentual: Optional[float]
+    saldos_por_conta: list["ContaSaldo"] = []
 
 class FluxoMensal(BaseModel):
     mes: str

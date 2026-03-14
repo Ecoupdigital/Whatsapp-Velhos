@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
-from models import Transacao
+from models import Transacao, Conta
 from schemas import (
     TransacaoCreate, TransacaoUpdate, TransacaoOut,
-    BalancoOut, FluxoMensal,
+    BalancoOut, FluxoMensal, ContaSaldo,
 )
 from auth import get_current_user
 from datetime import datetime
@@ -21,6 +21,7 @@ def listar_transacoes(
     categoria: str | None = Query(None),
     data_inicio: str | None = Query(None),
     data_fim: str | None = Query(None),
+    conta_id: int | None = Query(None),
     db: Session = Depends(get_db),
 ):
     q = db.query(Transacao)
@@ -32,6 +33,8 @@ def listar_transacoes(
         q = q.filter(Transacao.data >= data_inicio)
     if data_fim:
         q = q.filter(Transacao.data <= data_fim)
+    if conta_id is not None:
+        q = q.filter(Transacao.conta_id == conta_id)
     return q.order_by(Transacao.data.desc(), Transacao.id.desc()).all()
 
 
@@ -93,11 +96,32 @@ def balanco(db: Session = Depends(get_db)):
     if entradas_anterior > 0:
         variacao = round(((entradas_mes - entradas_anterior) / entradas_anterior) * 100, 1)
 
+    # Saldos por conta
+    saldos_por_conta = []
+    contas = db.query(Conta).filter(Conta.ativo == 1).all()
+    for conta in contas:
+        ent = (
+            db.query(func.coalesce(func.sum(Transacao.valor), 0))
+            .filter(Transacao.conta_id == conta.id, Transacao.tipo == "entrada")
+            .scalar()
+        )
+        sai = (
+            db.query(func.coalesce(func.sum(Transacao.valor), 0))
+            .filter(Transacao.conta_id == conta.id, Transacao.tipo == "saida")
+            .scalar()
+        )
+        saldos_por_conta.append(ContaSaldo(
+            nome=conta.nome,
+            tipo=conta.tipo,
+            saldo=conta.saldo_inicial + ent - sai,
+        ))
+
     return BalancoOut(
         saldo_total=saldo,
         entradas_mes=entradas_mes,
         saidas_mes=saidas_mes,
         variacao_percentual=variacao,
+        saldos_por_conta=saldos_por_conta,
     )
 
 

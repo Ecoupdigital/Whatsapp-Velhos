@@ -58,6 +58,17 @@ class Mensalidade(Base):
     jogador = relationship("Jogador", back_populates="mensalidades")
 
 
+class Conta(Base):
+    __tablename__ = "contas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(Text, nullable=False)
+    tipo = Column(Text, nullable=False, default="dinheiro")  # dinheiro | banco
+    saldo_inicial = Column(Float, default=0)
+    ativo = Column(Integer, default=1)
+    created_at = Column(Text, default=lambda: datetime.now().isoformat())
+
+
 class Transacao(Base):
     __tablename__ = "transacoes"
 
@@ -69,6 +80,7 @@ class Transacao(Base):
     data = Column(Text, nullable=False)
     jogador_id = Column(Integer, ForeignKey("jogadores.id"))
     evento_id = Column(Integer, ForeignKey("eventos.id"))
+    conta_id = Column(Integer, ForeignKey("contas.id"))
     comprovante = Column(Text)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 

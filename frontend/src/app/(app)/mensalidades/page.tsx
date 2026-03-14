@@ -20,6 +20,7 @@ import {
   CheckSquare,
   Square,
   UserPlus,
+  ChevronDown,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, formatCurrency, formatDate, formatMonth } from "@/lib/utils";
@@ -28,6 +29,7 @@ import type {
   MensalidadeResumo,
   MensalidadeUpdate,
   GerarMensalidadesRequest,
+  ContaOut,
 } from "@/types";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -104,13 +106,15 @@ function SkeletonRow() {
 
 interface QuickPayProps {
   mensalidade: MensalidadeOut;
+  contas: ContaOut[];
   onConfirm: (id: number, data: MensalidadeUpdate) => Promise<void>;
   onClose: () => void;
 }
 
-function QuickPayPopover({ mensalidade, onConfirm, onClose }: QuickPayProps) {
+function QuickPayPopover({ mensalidade, contas, onConfirm, onClose }: QuickPayProps) {
   const [forma, setForma] = useState("pix");
   const [valor, setValor] = useState(String(mensalidade.valor));
+  const [contaId, setContaId] = useState<number | null>(contas.find((c) => c.ativo === 1)?.id ?? null);
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -132,6 +136,7 @@ function QuickPayPopover({ mensalidade, onConfirm, onClose }: QuickPayProps) {
         valor_pago: parseFloat(valor),
         data_pagamento: todayISO(),
         forma_pagto: forma,
+        conta_id: contaId,
       });
     } finally {
       setLoading(false);
@@ -143,6 +148,8 @@ function QuickPayPopover({ mensalidade, onConfirm, onClose }: QuickPayProps) {
     { value: "dinheiro", label: "Dinheiro" },
     { value: "transferencia", label: "Transferencia" },
   ];
+
+  const activeContas = contas.filter((c) => c.ativo === 1);
 
   return (
     <motion.div
@@ -182,6 +189,31 @@ function QuickPayPopover({ mensalidade, onConfirm, onClose }: QuickPayProps) {
           ))}
         </div>
       </div>
+
+      {/* Conta */}
+      {activeContas.length > 0 && (
+        <div className="space-y-2">
+          <label className="text-xs text-txt-secondary font-body">Conta</label>
+          <div className="relative">
+            <select
+              value={contaId ?? ""}
+              onChange={(e) => setContaId(e.target.value ? Number(e.target.value) : null)}
+              className="w-full appearance-none bg-surface-card border border-border-subtle rounded-md px-3 py-2 pr-7 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
+            >
+              <option value="">Sem conta</option>
+              {activeContas.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={12}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-txt-tertiary pointer-events-none"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Valor */}
       <div className="space-y-2">
@@ -236,11 +268,14 @@ export default function MensalidadesPage() {
   const [flashRowId, setFlashRowId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [editingMens, setEditingMens] = useState<MensalidadeOut | null>(null);
-  const [editForm, setEditForm] = useState({ valor: "", valor_pago: "", status: "", forma_pagto: "", data_pagamento: "", observacoes: "" });
+  const [editForm, setEditForm] = useState({ valor: "", valor_pago: "", status: "", forma_pagto: "", data_pagamento: "", observacoes: "", conta_id: "" as string });
   const [editSaving, setEditSaving] = useState(false);
 
   // Selection
   const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  // Contas
+  const [contas, setContas] = useState<ContaOut[]>([]);
 
   // New mensalidade modal
   const [newModalOpen, setNewModalOpen] = useState(false);
@@ -345,6 +380,7 @@ export default function MensalidadesPage() {
       forma_pagto: m.forma_pagto || "",
       data_pagamento: m.data_pagamento || "",
       observacoes: m.observacoes || "",
+      conta_id: m.conta_id ? String(m.conta_id) : "",
     });
   }
 
@@ -359,6 +395,7 @@ export default function MensalidadesPage() {
         forma_pagto: editForm.forma_pagto || null,
         data_pagamento: editForm.data_pagamento || null,
         observacoes: editForm.observacoes || null,
+        conta_id: editForm.conta_id ? parseInt(editForm.conta_id) : null,
       };
       await api.put(`/mensalidades/${editingMens.id}`, update);
       toast.success("Mensalidade atualizada");
@@ -381,10 +418,12 @@ export default function MensalidadesPage() {
     return nome.includes(q) || apelido.includes(q);
   });
 
-  // ---- Fetch jogadores for new modal ----
+  // ---- Fetch jogadores and contas for modals ----
   useEffect(() => {
     api.get<Array<{ id: number; nome: string; apelido: string | null; tipo: string }>>("/jogadores?ativo=1")
       .then(setJogadores).catch(() => {});
+    api.get<ContaOut[]>("/contas")
+      .then(setContas).catch(() => {});
   }, []);
 
   // ---- Selection ----
@@ -840,6 +879,7 @@ export default function MensalidadesPage() {
                             {quickPayId === m.id && (
                               <QuickPayPopover
                                 mensalidade={m}
+                                contas={contas}
                                 onConfirm={handleQuickPay}
                                 onClose={() => setQuickPayId(null)}
                               />
@@ -1008,6 +1048,7 @@ export default function MensalidadesPage() {
                     {quickPayId === m.id && (
                       <QuickPayPopover
                         mensalidade={m}
+                        contas={contas}
                         onConfirm={handleQuickPay}
                         onClose={() => setQuickPayId(null)}
                       />
@@ -1125,6 +1166,31 @@ export default function MensalidadesPage() {
               <option value="outro">Outro</option>
             </select>
           </div>
+
+          {/* Conta */}
+          {contas.filter((c) => c.ativo === 1).length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-txt-secondary font-body">Conta</label>
+              <div className="relative">
+                <select
+                  value={editForm.conta_id}
+                  onChange={(e) => setEditForm((p) => ({ ...p, conta_id: e.target.value }))}
+                  className="h-10 w-full appearance-none rounded-lg px-3 pr-8 text-sm font-body bg-surface-tertiary border border-border text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+                >
+                  <option value="">Sem conta</option>
+                  {contas.filter((c) => c.ativo === 1).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome} ({c.tipo})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-tertiary pointer-events-none"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Data pagamento */}
           <div className="flex flex-col gap-1.5">

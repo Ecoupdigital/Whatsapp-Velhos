@@ -106,7 +106,9 @@ def atualizar(mensalidade_id: int, data: MensalidadeUpdate, db: Session = Depend
     if not m:
         raise HTTPException(status_code=404, detail="Mensalidade nao encontrada")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    # Extrair conta_id antes de setar campos no model (Mensalidade nao tem conta_id)
+    conta_id = data.conta_id
+    for field, value in data.model_dump(exclude_unset=True, exclude={"conta_id"}).items():
         setattr(m, field, value)
 
     # Se marcou como pago, cria transacao de entrada automaticamente
@@ -120,6 +122,7 @@ def atualizar(mensalidade_id: int, data: MensalidadeUpdate, db: Session = Depend
             valor=data.valor_pago,
             data=data.data_pagamento or datetime.now().strftime("%Y-%m-%d"),
             jogador_id=m.jogador_id,
+            conta_id=conta_id,
         )
         db.add(transacao)
 

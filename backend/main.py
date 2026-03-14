@@ -3,10 +3,10 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, SessionLocal
-from models import Usuario
+from models import Usuario, Conta
 from auth import hash_password
 
-from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes
+from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes, contas
 from routers.configuracoes import seed_defaults as seed_default_configs
 from services.scheduler import start_scheduler, stop_scheduler
 
@@ -31,7 +31,15 @@ def _migrate():
                 conn.execute(text("ALTER TABLE jogos ADD COLUMN assistencias TEXT"))
             if "destaque" not in existing:
                 conn.execute(text("ALTER TABLE jogos ADD COLUMN destaque TEXT"))
-            conn.commit()
+
+        # contas table - create if missing (handled by create_all, but ensure it exists)
+        # transacoes table - add conta_id column if missing
+        if "transacoes" in insp.get_table_names():
+            existing_trans = {c["name"] for c in insp.get_columns("transacoes")}
+            if "conta_id" not in existing_trans:
+                conn.execute(text("ALTER TABLE transacoes ADD COLUMN conta_id INTEGER REFERENCES contas(id)"))
+
+        conn.commit()
 
 try:
     _migrate()
@@ -63,6 +71,7 @@ app.include_router(cartoes.router)
 app.include_router(promocoes.router)
 app.include_router(whatsapp.router)
 app.include_router(dashboard.router)
+app.include_router(contas.router)
 app.include_router(configuracoes.router)
 
 
@@ -81,6 +90,13 @@ def on_startup():
             )
             db.add(admin)
             db.commit()
+
+        # Seed default contas
+        if db.query(Conta).count() == 0:
+            db.add(Conta(nome="Caixa", tipo="dinheiro", saldo_inicial=0))
+            db.add(Conta(nome="Banco", tipo="banco", saldo_inicial=0))
+            db.commit()
+            log.info("Seed: 2 contas padrao criadas (Caixa, Banco).")
 
         # Seed default configs
         inserted = seed_default_configs(db)

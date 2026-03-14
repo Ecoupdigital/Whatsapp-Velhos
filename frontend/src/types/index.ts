@@ -81,6 +81,7 @@ export interface MensalidadeUpdate {
   data_pagamento?: string | null;
   forma_pagto?: string | null;
   observacoes?: string | null;
+  conta_id?: number | null;
 }
 
 export interface MensalidadeOut {
@@ -93,6 +94,7 @@ export interface MensalidadeOut {
   data_pagamento: string | null;
   forma_pagto: string | null;
   observacoes: string | null;
+  conta_id: number | null;
   created_at: string | null;
   jogador: JogadorOut | null;
 }
@@ -122,6 +124,7 @@ export interface TransacaoCreate {
   data: string;
   jogador_id?: number | null;
   evento_id?: number | null;
+  conta_id?: number | null;
 }
 
 export interface TransacaoUpdate {
@@ -132,6 +135,7 @@ export interface TransacaoUpdate {
   data?: string | null;
   jogador_id?: number | null;
   evento_id?: number | null;
+  conta_id?: number | null;
 }
 
 export interface TransacaoOut {
@@ -143,6 +147,7 @@ export interface TransacaoOut {
   data: string;
   jogador_id: number | null;
   evento_id: number | null;
+  conta_id: number | null;
   comprovante: string | null;
   created_at: string | null;
 }
@@ -152,6 +157,7 @@ export interface BalancoOut {
   entradas_mes: number;
   saidas_mes: number;
   variacao_percentual: number | null;
+  saldos_por_conta?: ContaSaldo[];
 }
 
 export interface FluxoMensal {
@@ -397,4 +403,35 @@ export interface DashboardData {
   proximos_jogos: JogoOut[];
   alertas: string[];
   fluxo_mensal: FluxoMensal[];
+}
+
+// === Contas Financeiras ===
+
+export interface ContaOut {
+  id: number;
+  nome: string;
+  tipo: string;
+  saldo_inicial: number;
+  ativo: number;
+  saldo_atual: number;
+  created_at: string | null;
+}
+
+export interface ContaCreate {
+  nome: string;
+  tipo?: string;
+  saldo_inicial?: number;
+}
+
+export interface ContaUpdate {
+  nome?: string;
+  tipo?: string;
+  saldo_inicial?: number;
+  ativo?: number;
+}
+
+export interface ContaSaldo {
+  nome: string;
+  tipo: string;
+  saldo: number;
 }
