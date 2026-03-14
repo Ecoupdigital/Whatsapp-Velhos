@@ -9,6 +9,10 @@ import {
   Phone,
   Edit,
   Eye,
+  Trash2,
+  CheckSquare,
+  Square,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -154,6 +158,14 @@ export default function JogadoresPage() {
   const [form, setForm] = useState<JogadorForm>(emptyForm);
   const [saving, setSaving] = useState(false);
 
+  // Selection & bulk
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkField, setBulkField] = useState<string>("tipo");
+  const [bulkValue, setBulkValue] = useState<string>("jogador");
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   /* ─ fetch ─ */
   const fetchJogadores = useCallback(async () => {
     setLoading(true);
@@ -232,6 +244,91 @@ export default function JogadoresPage() {
       toast.error(msg);
     } finally {
       setSaving(false);
+    }
+  }
+
+  /* ─── delete handler ─ */
+  async function handleDelete(id: number) {
+    if (deletingId === id) {
+      try {
+        await api.delete(`/jogadores/${id}`);
+        toast.success("Jogador excluido");
+        setDeletingId(null);
+        setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
+        fetchJogadores();
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao excluir");
+      }
+    } else {
+      setDeletingId(id);
+      setTimeout(() => setDeletingId(null), 3000);
+    }
+  }
+
+  /* ─── selection handlers ─ */
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === jogadores.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(jogadores.map((j) => j.id)));
+    }
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  /* ─── bulk edit handler ─ */
+  async function handleBulkEdit() {
+    if (selected.size === 0) return;
+    setBulkSaving(true);
+    try {
+      const updates: Record<string, unknown> = {};
+      if (bulkField === "tipo") updates.tipo = bulkValue;
+      if (bulkField === "ativo") updates.ativo = bulkValue === "1" ? 1 : 0;
+      if (bulkField === "excluido_envio") updates.excluido_envio = bulkValue === "1" ? 1 : 0;
+
+      let ok = 0;
+      const ids = Array.from(selected);
+      for (let i = 0; i < ids.length; i++) {
+        try {
+          await api.put(`/jogadores/${ids[i]}`, updates);
+          ok++;
+        } catch { /* skip */ }
+      }
+      toast.success(`${ok} jogador(es) atualizado(s)`);
+      setBulkModalOpen(false);
+      setSelected(new Set());
+      fetchJogadores();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro na edicao em massa");
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  /* ─── bulk delete handler ─ */
+  async function handleBulkDelete() {
+    if (selected.size === 0) return;
+    const count = selected.size;
+    try {
+      const ids = Array.from(selected);
+      for (let i = 0; i < ids.length; i++) {
+        await api.delete(`/jogadores/${ids[i]}`);
+      }
+      toast.success(`${count} jogador(es) excluido(s)`);
+      setSelected(new Set());
+      fetchJogadores();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao excluir");
     }
   }
 
@@ -316,23 +413,50 @@ export default function JogadoresPage() {
         </div>
       </Card>
 
+      {/* ─── Bulk action bar ─────────────────────────────────── */}
+      {selected.size > 0 && (
+        <Card padding="sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-body text-txt-primary">
+                <strong>{selected.size}</strong> selecionado{selected.size !== 1 ? "s" : ""}
+              </span>
+              <button onClick={clearSelection} className="text-xs text-txt-tertiary hover:text-txt-primary transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={() => { setBulkField("tipo"); setBulkValue("jogador"); setBulkModalOpen(true); }}>
+                Editar em Massa
+              </Button>
+              <Button size="sm" variant="danger" onClick={handleBulkDelete} icon={<Trash2 />}>
+                Excluir ({selected.size})
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* ─── Table ──────────────────────────────────────────── */}
       <Card padding="none">
         {/* header */}
         <div
           className={cn(
-            "hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-4",
+            "hidden md:grid grid-cols-[auto_2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-4",
             "px-4 py-3 text-xs font-semibold uppercase tracking-wider",
             "text-txt-tertiary font-body",
             "border-b border-border-subtle"
           )}
         >
+          <button onClick={toggleSelectAll} className="w-6 flex items-center justify-center text-txt-tertiary hover:text-txt-primary">
+            {selected.size === jogadores.length && jogadores.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+          </button>
           <span>Nome</span>
           <span>Apelido</span>
           <span>Telefone</span>
           <span>Tipo</span>
           <span>Status</span>
-          <span className="w-20 text-center">Acoes</span>
+          <span className="w-24 text-center">Acoes</span>
         </div>
 
         {/* loading */}
@@ -369,13 +493,21 @@ export default function JogadoresPage() {
                   exit={{ opacity: 0 }}
                   transition={{ delay: idx * 0.03 }}
                   className={cn(
-                    "grid grid-cols-1 md:grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-2 md:gap-4",
+                    "grid grid-cols-1 md:grid-cols-[auto_2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-2 md:gap-4",
                     "items-center px-4 py-3",
                     "border-b border-border-subtle",
-                    "bg-surface-card hover:bg-surface-card-hover",
+                    selected.has(j.id) ? "bg-brand-red/5" : "bg-surface-card hover:bg-surface-card-hover",
                     "transition-colors duration-150"
                   )}
                 >
+                  {/* Checkbox */}
+                  <button
+                    onClick={() => toggleSelect(j.id)}
+                    className="w-6 flex items-center justify-center text-txt-tertiary hover:text-txt-primary"
+                  >
+                    {selected.has(j.id) ? <CheckSquare className="h-4 w-4 text-brand-red" /> : <Square className="h-4 w-4" />}
+                  </button>
+
                   {/* Nome */}
                   <div className="flex items-center gap-2">
                     <div className="hidden md:flex h-8 w-8 rounded-full bg-surface-tertiary items-center justify-center text-txt-tertiary">
@@ -424,7 +556,7 @@ export default function JogadoresPage() {
                   </div>
 
                   {/* Acoes */}
-                  <div className="flex items-center gap-1 w-20 justify-center">
+                  <div className="flex items-center gap-1 w-24 justify-center">
                     <Button
                       variant="icon"
                       size="sm"
@@ -440,6 +572,18 @@ export default function JogadoresPage() {
                         aria-label={`Ver ${j.nome}`}
                       />
                     </Link>
+                    <button
+                      onClick={() => handleDelete(j.id)}
+                      className={cn(
+                        "h-8 w-8 rounded-lg flex items-center justify-center transition-colors",
+                        deletingId === j.id
+                          ? "bg-red-500/20 text-red-400"
+                          : "text-txt-tertiary hover:text-red-400 hover:bg-red-500/10"
+                      )}
+                      title={deletingId === j.id ? "Clique de novo para confirmar" : "Excluir"}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </motion.div>
               ))}
@@ -602,6 +746,78 @@ export default function JogadoresPage() {
             </Button>
           </ModalFooter>
         </form>
+      </Modal>
+
+      {/* ═══ BULK EDIT MODAL ═══════════════════════════════════ */}
+      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} size="md">
+        <ModalHeader>Editar em Massa ({selected.size} jogadores)</ModalHeader>
+        <ModalBody className="space-y-4">
+          <p className="text-sm text-txt-secondary font-body">
+            Selecione o campo e o novo valor para aplicar a todos os jogadores selecionados.
+          </p>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Campo</label>
+            <select
+              value={bulkField}
+              onChange={(e) => {
+                setBulkField(e.target.value);
+                if (e.target.value === "tipo") setBulkValue("jogador");
+                if (e.target.value === "ativo") setBulkValue("1");
+                if (e.target.value === "excluido_envio") setBulkValue("0");
+              }}
+              className={cn(
+                "h-10 rounded-lg px-3 text-sm font-body",
+                "bg-surface-tertiary border border-border text-txt-primary",
+                "focus:outline-none focus:ring-2 focus:ring-brand-red/50 focus:border-brand-red"
+              )}
+            >
+              <option value="tipo">Tipo (Jogador / Socio)</option>
+              <option value="ativo">Status (Ativo / Inativo)</option>
+              <option value="excluido_envio">Envio WhatsApp (Recebe / Nao Recebe)</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Novo valor</label>
+            <select
+              value={bulkValue}
+              onChange={(e) => setBulkValue(e.target.value)}
+              className={cn(
+                "h-10 rounded-lg px-3 text-sm font-body",
+                "bg-surface-tertiary border border-border text-txt-primary",
+                "focus:outline-none focus:ring-2 focus:ring-brand-red/50 focus:border-brand-red"
+              )}
+            >
+              {bulkField === "tipo" && (
+                <>
+                  <option value="jogador">Jogador</option>
+                  <option value="socio">Socio</option>
+                </>
+              )}
+              {bulkField === "ativo" && (
+                <>
+                  <option value="1">Ativo</option>
+                  <option value="0">Inativo</option>
+                </>
+              )}
+              {bulkField === "excluido_envio" && (
+                <>
+                  <option value="0">Recebe mensagens</option>
+                  <option value="1">Nao recebe mensagens</option>
+                </>
+              )}
+            </select>
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setBulkModalOpen(false)}>
+            Cancelar
+          </Button>
+          <Button loading={bulkSaving} onClick={handleBulkEdit}>
+            Aplicar a {selected.size} jogador{selected.size !== 1 ? "es" : ""}
+          </Button>
+        </ModalFooter>
       </Modal>
     </div>
   );
