@@ -135,9 +135,9 @@ export default function MobileNav() {
 
       {/* Fullscreen Menu Overlay */}
       {menuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden bg-surface-primary overflow-y-auto">
+        <div className="fixed inset-0 z-50 md:hidden bg-surface-primary overflow-y-auto" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           {/* Overlay Header */}
-          <div className="flex items-center justify-between h-16 px-4 border-b border-border-subtle">
+          <div className="flex items-center justify-between h-14 px-4 border-b border-border-subtle">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-brand-red flex items-center justify-center">
                 <span className="font-display text-white text-lg font-bold">

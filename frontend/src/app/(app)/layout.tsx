@@ -62,6 +62,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main
         id="app-main"
         className="flex-1 min-w-0 transition-all duration-300 p-3 sm:p-4 md:p-6 lg:p-8 pb-24 md:pb-6 lg:pb-8 overflow-x-hidden"
+        style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}
       >
         {children}
       </main>
