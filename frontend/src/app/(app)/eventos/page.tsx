@@ -12,12 +12,14 @@ import {
   Music,
   Trophy,
   Sparkles,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
-import type { EventoOut, EventoCreate } from "@/types";
+import type { EventoOut, EventoCreate, EventoUpdate } from "@/types";
 import {
   Button,
   Card,
@@ -37,6 +39,13 @@ const TIPO_OPTIONS = [
   { value: "baile", label: "Baile" },
   { value: "confraternizacao", label: "Confraternizacao" },
   { value: "torneio", label: "Torneio" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "planejado", label: "Planejado" },
+  { value: "em_andamento", label: "Em andamento" },
+  { value: "concluido", label: "Concluido" },
+  { value: "cancelado", label: "Cancelado" },
 ];
 
 const FILTER_TABS = [
@@ -70,7 +79,7 @@ const statusLabels: Record<string, string> = {
 
 /* ─── Form initial state ─────────────────────────────────────── */
 
-const emptyForm: EventoCreate = {
+const emptyForm: EventoCreate & { custo_real?: number; status?: string } = {
   tipo: "viagem",
   titulo: "",
   descricao: "",
@@ -78,6 +87,8 @@ const emptyForm: EventoCreate = {
   data_fim: "",
   local: "",
   custo_estimado: 0,
+  custo_real: 0,
+  status: "planejado",
 };
 
 /* ─── Page Component ─────────────────────────────────────────── */
@@ -88,7 +99,9 @@ export default function EventosPage() {
   const [filter, setFilter] = useState("todos");
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState<EventoCreate>(emptyForm);
+  const [form, setForm] = useState<EventoCreate & { custo_real?: number; status?: string }>(emptyForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const fetchEventos = useCallback(async () => {
     try {
@@ -109,6 +122,28 @@ export default function EventosPage() {
   const filteredEventos =
     filter === "todos" ? eventos : eventos.filter((e) => e.tipo === filter);
 
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const openEdit = (evento: EventoOut) => {
+    setEditingId(evento.id);
+    setForm({
+      tipo: evento.tipo,
+      titulo: evento.titulo,
+      descricao: evento.descricao || "",
+      data_inicio: evento.data_inicio || "",
+      data_fim: evento.data_fim || "",
+      local: evento.local || "",
+      custo_estimado: evento.custo_estimado,
+      custo_real: evento.custo_real,
+      status: evento.status,
+    });
+    setModalOpen(true);
+  };
+
   const handleSubmit = async () => {
     if (!form.titulo.trim()) {
       toast.error("Titulo e obrigatorio");
@@ -116,19 +151,60 @@ export default function EventosPage() {
     }
     try {
       setSubmitting(true);
-      await api.post<EventoOut>("/eventos", form);
-      toast.success("Evento criado com sucesso");
-      setModalOpen(false);
-      setForm(emptyForm);
+      if (editingId !== null) {
+        const payload: EventoUpdate = {
+          tipo: form.tipo,
+          titulo: form.titulo,
+          descricao: form.descricao || null,
+          data_inicio: form.data_inicio || null,
+          data_fim: form.data_fim || null,
+          local: form.local || null,
+          custo_estimado: form.custo_estimado,
+          custo_real: form.custo_real ?? null,
+          status: form.status || null,
+        };
+        await api.put<EventoOut>(`/eventos/${editingId}`, payload);
+        toast.success("Evento atualizado com sucesso");
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { custo_real, status, ...createPayload } = form;
+        await api.post<EventoOut>("/eventos", createPayload as EventoCreate);
+        toast.success("Evento criado com sucesso");
+      }
+      closeModal();
       fetchEventos();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Erro ao criar evento");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : editingId
+            ? "Erro ao atualizar evento"
+            : "Erro ao criar evento"
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const updateField = <K extends keyof EventoCreate>(key: K, value: EventoCreate[K]) => {
+  const handleDelete = async (id: number) => {
+    if (deletingId === id) {
+      // Second click = confirm
+      try {
+        await api.delete(`/eventos/${id}`);
+        toast.success("Evento excluido");
+        setDeletingId(null);
+        fetchEventos();
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao excluir");
+      }
+    } else {
+      // First click = ask confirmation
+      setDeletingId(id);
+      setTimeout(() => setDeletingId(null), 3000);
+    }
+  };
+
+  const updateField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -141,7 +217,11 @@ export default function EventosPage() {
         </h1>
         <Button
           icon={<Plus />}
-          onClick={() => setModalOpen(true)}
+          onClick={() => {
+            setEditingId(null);
+            setForm(emptyForm);
+            setModalOpen(true);
+          }}
         >
           Novo Evento
         </Button>
@@ -213,7 +293,7 @@ export default function EventosPage() {
                   <Link href={`/eventos/${evento.id}`}>
                     <Card
                       hoverable
-                      className="group cursor-pointer transition-all duration-300 hover:-translate-y-[2px] hover:shadow-lg hover:shadow-black/30"
+                      className="group cursor-pointer transition-all duration-300 hover:-translate-y-[2px] hover:shadow-lg hover:shadow-black/30 relative"
                     >
                       <div className="flex items-start justify-between mb-3">
                         {/* Type Badge */}
@@ -278,6 +358,37 @@ export default function EventosPage() {
                           <span>Ver detalhes</span>
                         </div>
                       </div>
+
+                      {/* Edit / Delete buttons */}
+                      <div className="absolute bottom-3 right-3 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openEdit(evento);
+                          }}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary"
+                          title="Editar evento"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDelete(evento.id);
+                          }}
+                          className={cn(
+                            "h-7 w-7 rounded-lg flex items-center justify-center transition-colors",
+                            deletingId === evento.id
+                              ? "bg-red-500/20 text-red-400"
+                              : "text-txt-tertiary hover:text-red-400 hover:bg-red-500/10"
+                          )}
+                          title={deletingId === evento.id ? "Clique de novo para confirmar" : "Excluir evento"}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </Card>
                   </Link>
                 </motion.div>
@@ -287,9 +398,9 @@ export default function EventosPage() {
         </div>
       )}
 
-      {/* ── New Event Modal ──────────────────────────────────── */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} size="lg">
-        <ModalHeader>Novo Evento</ModalHeader>
+      {/* ── Create / Edit Event Modal ─────────────────────────── */}
+      <Modal open={modalOpen} onClose={closeModal} size="lg">
+        <ModalHeader>{editingId !== null ? "Editar Evento" : "Novo Evento"}</ModalHeader>
         <ModalBody className="space-y-4">
           <Select
             label="Tipo"
@@ -337,13 +448,32 @@ export default function EventosPage() {
             value={form.custo_estimado || ""}
             onChange={(e) => updateField("custo_estimado", parseFloat(e.target.value) || 0)}
           />
+          {/* Fields only shown when editing */}
+          {editingId !== null && (
+            <>
+              <Select
+                label="Status"
+                options={STATUS_OPTIONS}
+                value={form.status || "planejado"}
+                onChange={(e) => updateField("status", e.target.value)}
+              />
+              <Input
+                label="Custo Real (R$)"
+                type="number"
+                min={0}
+                step={0.01}
+                value={form.custo_real || ""}
+                onChange={(e) => updateField("custo_real", parseFloat(e.target.value) || 0)}
+              />
+            </>
+          )}
         </ModalBody>
         <ModalFooter>
-          <Button variant="secondary" onClick={() => setModalOpen(false)}>
+          <Button variant="secondary" onClick={closeModal}>
             Cancelar
           </Button>
           <Button loading={submitting} onClick={handleSubmit}>
-            Criar Evento
+            {editingId !== null ? "Salvar Alteracoes" : "Criar Evento"}
           </Button>
         </ModalFooter>
       </Modal>

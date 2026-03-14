@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -18,6 +18,8 @@ import {
   Music,
   PartyPopper,
   Trophy,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -25,6 +27,7 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
 import type {
   EventoOut,
+  EventoUpdate,
   ParticipanteOut,
   ParticipanteUpdate,
   JogadorOut,
@@ -32,6 +35,7 @@ import type {
 import {
   Button,
   Card,
+  Input,
   Select,
   Modal,
   ModalHeader,
@@ -41,6 +45,20 @@ import {
 } from "@/components/ui";
 
 /* ─── Constants ──────────────────────────────────────────────── */
+
+const TIPO_OPTIONS = [
+  { value: "viagem", label: "Viagem" },
+  { value: "baile", label: "Baile" },
+  { value: "confraternizacao", label: "Confraternizacao" },
+  { value: "torneio", label: "Torneio" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "planejado", label: "Planejado" },
+  { value: "em_andamento", label: "Em andamento" },
+  { value: "concluido", label: "Concluido" },
+  { value: "cancelado", label: "Cancelado" },
+];
 
 const tipoBadgeStyles: Record<string, { bg: string; text: string; icon: typeof Plane }> = {
   viagem: { bg: "bg-emerald-500/15", text: "text-emerald-400", icon: Plane },
@@ -77,10 +95,25 @@ const PARTICIPANT_STATUS_OPTIONS = [
   { value: "talvez", label: "Talvez" },
 ];
 
+/* ─── Edit form type ─────────────────────────────────────────── */
+
+interface EditForm {
+  tipo: string;
+  titulo: string;
+  descricao: string;
+  data_inicio: string;
+  data_fim: string;
+  local: string;
+  custo_estimado: number;
+  custo_real: number;
+  status: string;
+}
+
 /* ─── Page Component ─────────────────────────────────────────── */
 
 export default function EventoDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const eventoId = params.id as string;
 
   const [evento, setEvento] = useState<EventoOut | null>(null);
@@ -90,6 +123,24 @@ export default function EventoDetailPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedJogadorId, setSelectedJogadorId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit event state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editForm, setEditForm] = useState<EditForm>({
+    tipo: "",
+    titulo: "",
+    descricao: "",
+    data_inicio: "",
+    data_fim: "",
+    local: "",
+    custo_estimado: 0,
+    custo_real: 0,
+    status: "planejado",
+  });
+
+  // Delete event state
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const fetchEvento = useCallback(async () => {
     try {
@@ -177,6 +228,70 @@ export default function EventoDetailPage() {
     }
   };
 
+  const openEditModal = () => {
+    if (!evento) return;
+    setEditForm({
+      tipo: evento.tipo,
+      titulo: evento.titulo,
+      descricao: evento.descricao || "",
+      data_inicio: evento.data_inicio || "",
+      data_fim: evento.data_fim || "",
+      local: evento.local || "",
+      custo_estimado: evento.custo_estimado,
+      custo_real: evento.custo_real,
+      status: evento.status,
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editForm.titulo.trim()) {
+      toast.error("Titulo e obrigatorio");
+      return;
+    }
+    try {
+      setEditSubmitting(true);
+      const payload: EventoUpdate = {
+        tipo: editForm.tipo,
+        titulo: editForm.titulo,
+        descricao: editForm.descricao || null,
+        data_inicio: editForm.data_inicio || null,
+        data_fim: editForm.data_fim || null,
+        local: editForm.local || null,
+        custo_estimado: editForm.custo_estimado,
+        custo_real: editForm.custo_real,
+        status: editForm.status,
+      };
+      await api.put<EventoOut>(`/eventos/${eventoId}`, payload);
+      toast.success("Evento atualizado com sucesso");
+      setEditModalOpen(false);
+      fetchEvento();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar evento");
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteEvento = async () => {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      setTimeout(() => setDeleteConfirm(false), 3000);
+      return;
+    }
+    try {
+      await api.delete(`/eventos/${eventoId}`);
+      toast.success("Evento excluido");
+      router.push("/eventos");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao excluir evento");
+    }
+  };
+
+  const updateEditField = <K extends keyof EditForm>(key: K, value: EditForm[K]) => {
+    setEditForm((prev) => ({ ...prev, [key]: value }));
+  };
+
   // Filter out jogadores already participating
   const participantJogadorIds = new Set(participantes.map((p) => p.jogador_id));
   const availableJogadores = jogadores.filter(
@@ -256,6 +371,26 @@ export default function EventoDetailPage() {
                   {evento.descricao}
                 </p>
               )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Pencil />}
+                onClick={openEditModal}
+              >
+                Editar Evento
+              </Button>
+              <Button
+                size="sm"
+                variant={deleteConfirm ? "danger" : "secondary"}
+                icon={<Trash2 />}
+                onClick={handleDeleteEvento}
+              >
+                {deleteConfirm ? "Confirmar Exclusao" : "Excluir Evento"}
+              </Button>
             </div>
           </div>
 
@@ -484,6 +619,83 @@ export default function EventoDetailPage() {
           </Button>
           <Button loading={submitting} onClick={handleAddParticipant}>
             Adicionar
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* ── Edit Event Modal ─────────────────────────────────── */}
+      <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} size="lg">
+        <ModalHeader>Editar Evento</ModalHeader>
+        <ModalBody className="space-y-4">
+          <Select
+            label="Tipo"
+            options={TIPO_OPTIONS}
+            value={editForm.tipo}
+            onChange={(e) => updateEditField("tipo", e.target.value)}
+          />
+          <Input
+            label="Titulo"
+            placeholder="Nome do evento"
+            value={editForm.titulo}
+            onChange={(e) => updateEditField("titulo", e.target.value)}
+          />
+          <Input
+            label="Descricao"
+            placeholder="Descricao do evento (opcional)"
+            value={editForm.descricao}
+            onChange={(e) => updateEditField("descricao", e.target.value)}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Data Inicio"
+              type="date"
+              value={editForm.data_inicio}
+              onChange={(e) => updateEditField("data_inicio", e.target.value)}
+            />
+            <Input
+              label="Data Fim"
+              type="date"
+              value={editForm.data_fim}
+              onChange={(e) => updateEditField("data_fim", e.target.value)}
+            />
+          </div>
+          <Input
+            label="Local"
+            placeholder="Local do evento"
+            value={editForm.local}
+            onChange={(e) => updateEditField("local", e.target.value)}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Custo Estimado (R$)"
+              type="number"
+              min={0}
+              step={0.01}
+              value={editForm.custo_estimado || ""}
+              onChange={(e) => updateEditField("custo_estimado", parseFloat(e.target.value) || 0)}
+            />
+            <Input
+              label="Custo Real (R$)"
+              type="number"
+              min={0}
+              step={0.01}
+              value={editForm.custo_real || ""}
+              onChange={(e) => updateEditField("custo_real", parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <Select
+            label="Status"
+            options={STATUS_OPTIONS}
+            value={editForm.status}
+            onChange={(e) => updateEditField("status", e.target.value)}
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setEditModalOpen(false)}>
+            Cancelar
+          </Button>
+          <Button loading={editSubmitting} onClick={handleEditSubmit}>
+            Salvar Alteracoes
           </Button>
         </ModalFooter>
       </Modal>
