@@ -24,8 +24,8 @@ def dashboard(db: Session = Depends(get_db)):
     mensalidades_mes = db.query(Mensalidade).filter(Mensalidade.mes_referencia == mes_atual).all()
     pendentes = sum(1 for m in mensalidades_mes if m.status in ("pendente", "atrasado"))
 
-    # Jogadores
-    ativos = db.query(func.count(Jogador.id)).filter(Jogador.ativo == 1).scalar()
+    # Jogadores (so tipo "jogador", exclui socios da contagem)
+    ativos = db.query(func.count(Jogador.id)).filter(Jogador.ativo == 1, Jogador.tipo == "jogador").scalar()
     inativos = db.query(func.count(Jogador.id)).filter(Jogador.ativo == 0).scalar()
 
     # Proximo evento
