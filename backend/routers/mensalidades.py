@@ -73,6 +73,16 @@ def atualizar(mensalidade_id: int, data: MensalidadeUpdate, db: Session = Depend
     return m
 
 
+@router.delete("/{mensalidade_id}")
+def excluir(mensalidade_id: int, db: Session = Depends(get_db)):
+    m = db.query(Mensalidade).filter(Mensalidade.id == mensalidade_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="Mensalidade nao encontrada")
+    db.delete(m)
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/gerar", response_model=list[MensalidadeOut])
 def gerar_mensalidades(req: GerarMensalidadesRequest, db: Session = Depends(get_db)):
     jogadores = db.query(Jogador).filter(Jogador.ativo == 1).all()

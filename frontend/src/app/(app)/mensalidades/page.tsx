@@ -26,6 +26,8 @@ import type {
   MensalidadeUpdate,
   GerarMensalidadesRequest,
 } from "@/types";
+import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -229,6 +231,10 @@ export default function MensalidadesPage() {
   const [enviando, setEnviando] = useState(false);
   const [quickPayId, setQuickPayId] = useState<number | null>(null);
   const [flashRowId, setFlashRowId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingMens, setEditingMens] = useState<MensalidadeOut | null>(null);
+  const [editForm, setEditForm] = useState({ valor: "", valor_pago: "", status: "", forma_pagto: "", data_pagamento: "", observacoes: "" });
+  const [editSaving, setEditSaving] = useState(false);
 
   // ---- Fetch data ----
 
@@ -307,6 +313,60 @@ export default function MensalidadesPage() {
       const message = err instanceof Error ? err.message : "Erro ao registrar pagamento";
       toast.error(message);
       throw err;
+    }
+  }
+
+  // ---- Delete ----
+  async function handleDeleteMens(id: number) {
+    if (deletingId === id) {
+      try {
+        await api.delete(`/mensalidades/${id}`);
+        toast.success("Mensalidade excluida");
+        setDeletingId(null);
+        fetchMensalidades();
+        fetchResumo();
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao excluir");
+      }
+    } else {
+      setDeletingId(id);
+      setTimeout(() => setDeletingId(null), 3000);
+    }
+  }
+
+  // ---- Edit modal ----
+  function openEditMens(m: MensalidadeOut) {
+    setEditingMens(m);
+    setEditForm({
+      valor: String(m.valor),
+      valor_pago: String(m.valor_pago || 0),
+      status: m.status,
+      forma_pagto: m.forma_pagto || "",
+      data_pagamento: m.data_pagamento || "",
+      observacoes: m.observacoes || "",
+    });
+  }
+
+  async function handleEditSave() {
+    if (!editingMens) return;
+    setEditSaving(true);
+    try {
+      const update: MensalidadeUpdate = {
+        status: editForm.status,
+        valor_pago: parseFloat(editForm.valor_pago) || 0,
+        forma_pagto: editForm.forma_pagto || null,
+        data_pagamento: editForm.data_pagamento || null,
+        observacoes: editForm.observacoes || null,
+      };
+      await api.put(`/mensalidades/${editingMens.id}`, update);
+      toast.success("Mensalidade atualizada");
+      setEditingMens(null);
+      fetchMensalidades();
+      fetchResumo();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -646,7 +706,7 @@ export default function MensalidadesPage() {
 
                       {/* Acoes */}
                       <td className="px-4 py-3 text-right">
-                        <div className="relative inline-block">
+                        <div className="relative inline-flex items-center gap-1">
                           {!isPaid && (
                             <button
                               onClick={() =>
@@ -664,10 +724,31 @@ export default function MensalidadesPage() {
                             </button>
                           )}
                           {isPaid && (
-                            <span className="inline-flex items-center gap-1 text-xs text-emerald-400/60">
+                            <span className="inline-flex items-center gap-1 text-xs text-emerald-400/60 px-2">
                               <Check size={14} />
                             </span>
                           )}
+                          {/* Edit */}
+                          <button
+                            onClick={() => openEditMens(m)}
+                            className="h-7 w-7 rounded-lg flex items-center justify-center text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary transition-colors"
+                            title="Editar"
+                          >
+                            <CreditCard size={14} />
+                          </button>
+                          {/* Delete */}
+                          <button
+                            onClick={() => handleDeleteMens(m.id)}
+                            className={cn(
+                              "h-7 w-7 rounded-lg flex items-center justify-center transition-colors",
+                              deletingId === m.id
+                                ? "bg-red-500/20 text-red-400"
+                                : "text-txt-tertiary hover:text-red-400 hover:bg-red-500/10"
+                            )}
+                            title={deletingId === m.id ? "Confirmar exclusao" : "Excluir"}
+                          >
+                            <X size={14} />
+                          </button>
                           <AnimatePresence>
                             {quickPayId === m.id && (
                               <QuickPayPopover
@@ -687,6 +768,85 @@ export default function MensalidadesPage() {
           </table>
         </div>
       </div>
+
+      {/* ===== Edit Mensalidade Modal ===== */}
+      <Modal open={!!editingMens} onClose={() => setEditingMens(null)} size="md">
+        <ModalHeader>
+          Editar Mensalidade - {editingMens?.jogador?.apelido || editingMens?.jogador?.nome || ""}
+        </ModalHeader>
+        <ModalBody className="space-y-4">
+          {/* Status */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Status</label>
+            <select
+              value={editForm.status}
+              onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}
+              className="h-10 rounded-lg px-3 text-sm font-body bg-surface-tertiary border border-border text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+            >
+              <option value="pendente">Pendente</option>
+              <option value="pago">Pago</option>
+              <option value="atrasado">Atrasado</option>
+              <option value="isento">Isento</option>
+            </select>
+          </div>
+
+          {/* Valor pago */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Valor Pago (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={editForm.valor_pago}
+              onChange={(e) => setEditForm((p) => ({ ...p, valor_pago: e.target.value }))}
+              className="h-10 rounded-lg px-3 text-sm font-mono bg-surface-tertiary border border-border text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+            />
+          </div>
+
+          {/* Forma de pagamento */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Forma de Pagamento</label>
+            <select
+              value={editForm.forma_pagto}
+              onChange={(e) => setEditForm((p) => ({ ...p, forma_pagto: e.target.value }))}
+              className="h-10 rounded-lg px-3 text-sm font-body bg-surface-tertiary border border-border text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+            >
+              <option value="">Selecionar...</option>
+              <option value="pix">PIX</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="pix+dinheiro">PIX + Dinheiro</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+
+          {/* Data pagamento */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Data do Pagamento</label>
+            <input
+              type="date"
+              value={editForm.data_pagamento}
+              onChange={(e) => setEditForm((p) => ({ ...p, data_pagamento: e.target.value }))}
+              className="h-10 rounded-lg px-3 text-sm font-body bg-surface-tertiary border border-border text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+            />
+          </div>
+
+          {/* Observacoes */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Observacoes</label>
+            <textarea
+              value={editForm.observacoes}
+              onChange={(e) => setEditForm((p) => ({ ...p, observacoes: e.target.value }))}
+              rows={2}
+              placeholder="Ex: Pagou R$30 no PIX e R$30 em dinheiro"
+              className="rounded-lg px-3 py-2 text-sm font-body bg-surface-tertiary border border-border text-txt-primary placeholder:text-txt-tertiary focus:outline-none focus:ring-2 focus:ring-brand-red/50 resize-none"
+            />
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setEditingMens(null)}>Cancelar</Button>
+          <Button loading={editSaving} onClick={handleEditSave}>Salvar</Button>
+        </ModalFooter>
+      </Modal>
 
       {/* Flash green row animation */}
       <style jsx global>{`
