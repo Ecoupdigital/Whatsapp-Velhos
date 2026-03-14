@@ -16,7 +16,7 @@ def listar(
     q = db.query(Jogo)
     if tipo:
         q = q.filter(Jogo.tipo == tipo)
-    return q.order_by(Jogo.data.desc()).all()
+    return q.order_by(Jogo.data.asc()).all()
 
 
 @router.post("", response_model=JogoOut, status_code=201)
