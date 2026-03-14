@@ -122,6 +122,10 @@ class Jogo(Base):
     gols_contra = Column(Integer, default=0)
     tipo = Column(Text, default="amistoso")  # amistoso | campeonato | torneio
     observacoes = Column(Text)
+    realizado = Column(Integer, default=0)
+    gols_descricao = Column(Text)
+    assistencias = Column(Text)
+    destaque = Column(Text)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 
 

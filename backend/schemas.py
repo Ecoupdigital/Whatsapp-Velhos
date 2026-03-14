@@ -235,6 +235,10 @@ class JogoCreate(BaseModel):
     gols_contra: int = 0
     tipo: str = "amistoso"
     observacoes: Optional[str] = None
+    realizado: Optional[int] = 0
+    gols_descricao: Optional[str] = None
+    assistencias: Optional[str] = None
+    destaque: Optional[str] = None
 
 class JogoUpdate(BaseModel):
     data: Optional[str] = None
@@ -245,6 +249,10 @@ class JogoUpdate(BaseModel):
     gols_contra: Optional[int] = None
     tipo: Optional[str] = None
     observacoes: Optional[str] = None
+    realizado: Optional[int] = None
+    gols_descricao: Optional[str] = None
+    assistencias: Optional[str] = None
+    destaque: Optional[str] = None
 
 class JogoOut(BaseModel):
     id: int
@@ -256,6 +264,10 @@ class JogoOut(BaseModel):
     gols_contra: int
     tipo: str
     observacoes: Optional[str]
+    realizado: Optional[int] = 0
+    gols_descricao: Optional[str] = None
+    assistencias: Optional[str] = None
+    destaque: Optional[str] = None
     created_at: Optional[str]
 
     class Config:
@@ -268,6 +280,15 @@ class JogoEstatisticas(BaseModel):
     derrotas: int
     gols_marcados: int
     gols_sofridos: int
+
+class RankingEntry(BaseModel):
+    nome: str
+    quantidade: int
+
+class RankingsOut(BaseModel):
+    artilharia: list[RankingEntry]
+    assistencias: list[RankingEntry]
+    destaques: list[RankingEntry]
 
 
 # === Cartoes de Baile ===

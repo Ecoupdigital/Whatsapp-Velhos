@@ -229,6 +229,10 @@ export interface JogoCreate {
   gols_contra?: number;
   tipo?: string;
   observacoes?: string | null;
+  realizado?: number;
+  gols_descricao?: string | null;
+  assistencias?: string | null;
+  destaque?: string | null;
 }
 
 export interface JogoUpdate {
@@ -240,6 +244,10 @@ export interface JogoUpdate {
   gols_contra?: number | null;
   tipo?: string | null;
   observacoes?: string | null;
+  realizado?: number;
+  gols_descricao?: string | null;
+  assistencias?: string | null;
+  destaque?: string | null;
 }
 
 export interface JogoOut {
@@ -252,7 +260,22 @@ export interface JogoOut {
   gols_contra: number;
   tipo: string;
   observacoes: string | null;
+  realizado?: number;
+  gols_descricao?: string | null;
+  assistencias?: string | null;
+  destaque?: string | null;
   created_at: string | null;
+}
+
+export interface RankingEntry {
+  nome: string;
+  quantidade: number;
+}
+
+export interface RankingsOut {
+  artilharia: RankingEntry[];
+  assistencias: RankingEntry[];
+  destaques: RankingEntry[];
 }
 
 export interface JogoEstatisticas {
