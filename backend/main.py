@@ -15,6 +15,29 @@ log = logging.getLogger(__name__)
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+# Migrate: add missing columns to existing tables
+def _migrate():
+    from sqlalchemy import text, inspect
+    insp = inspect(engine)
+    with engine.connect() as conn:
+        # jogos table - add new columns if missing
+        if "jogos" in insp.get_table_names():
+            existing = {c["name"] for c in insp.get_columns("jogos")}
+            if "realizado" not in existing:
+                conn.execute(text("ALTER TABLE jogos ADD COLUMN realizado INTEGER DEFAULT 0"))
+            if "gols_descricao" not in existing:
+                conn.execute(text("ALTER TABLE jogos ADD COLUMN gols_descricao TEXT"))
+            if "assistencias" not in existing:
+                conn.execute(text("ALTER TABLE jogos ADD COLUMN assistencias TEXT"))
+            if "destaque" not in existing:
+                conn.execute(text("ALTER TABLE jogos ADD COLUMN destaque TEXT"))
+            conn.commit()
+
+try:
+    _migrate()
+except Exception as e:
+    log.warning(f"Migration: {e}")
+
 app = FastAPI(
     title="Velhos Parceiros FC - API",
     version="1.0.0",
