@@ -151,7 +151,7 @@ function QuickPayPopover({ mensalidade, onConfirm, onClose }: QuickPayProps) {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9, y: -8 }}
       transition={{ duration: 0.2 }}
-      className="absolute right-0 top-full mt-2 z-[110] w-72 bg-surface-elevated border border-border rounded-lg shadow-card p-4 space-y-4"
+      className="fixed inset-x-4 bottom-4 z-[110] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:bottom-auto w-auto sm:w-72 bg-surface-elevated border border-border rounded-lg shadow-card p-4 space-y-4"
     >
       <div className="flex items-center justify-between">
         <h4 className="font-display text-sm uppercase tracking-wider text-txt-primary">
@@ -498,10 +498,10 @@ export default function MensalidadesPage() {
   // ---- Render ----
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-4 sm:space-y-8 animate-fade-in">
       {/* ===== Header ===== */}
       <div>
-        <h1 className="font-display text-3xl lg:text-4xl uppercase tracking-wider text-txt-primary">
+        <h1 className="font-display text-xl sm:text-3xl lg:text-4xl uppercase tracking-wider text-txt-primary">
           Mensalidades
         </h1>
         <p className="text-txt-secondary font-body mt-1">
@@ -644,8 +644,8 @@ export default function MensalidadesPage() {
         </div>
       </div>
 
-      {/* ===== Table ===== */}
-      <div className="bg-surface-card border border-border-subtle rounded-lg overflow-hidden shadow-card">
+      {/* ===== Table (Desktop) ===== */}
+      <div className="hidden md:block bg-surface-card border border-border-subtle rounded-lg overflow-hidden shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-body">
             <thead>
@@ -854,6 +854,170 @@ export default function MensalidadesPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* ===== Mobile Cards ===== */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-surface-card border border-border-subtle rounded-lg p-4 animate-pulse">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-full bg-surface-tertiary" />
+                <div className="flex-1 h-4 bg-surface-tertiary rounded" />
+              </div>
+              <div className="h-3 w-20 bg-surface-tertiary rounded" />
+            </div>
+          ))
+        ) : filtered.length === 0 ? (
+          <div className="bg-surface-card border border-border-subtle rounded-lg p-8 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <div className="p-4 rounded-full bg-surface-tertiary">
+                <CreditCard size={32} className="text-txt-tertiary" />
+              </div>
+              <p className="text-txt-secondary font-body">
+                {mensalidades.length === 0
+                  ? "Nenhuma mensalidade para este mes"
+                  : "Nenhum resultado encontrado"}
+              </p>
+              {mensalidades.length === 0 && (
+                <button
+                  onClick={handleGerar}
+                  disabled={gerando}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-red text-white font-display text-sm uppercase tracking-wider hover:bg-brand-red-hover shadow-brand transition-all"
+                >
+                  <Plus size={16} />
+                  Gerar Mensalidades
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Mobile select all */}
+            <div className="flex items-center justify-between px-1">
+              <button onClick={toggleSelectAll} className="flex items-center gap-2 text-txt-tertiary hover:text-txt-primary text-sm font-body">
+                {selected.size === filtered.length && filtered.length > 0 ? <CheckSquare size={16} className="text-brand-red" /> : <Square size={16} />}
+                <span>Selecionar todos</span>
+              </button>
+              <span className="text-xs text-txt-tertiary font-body">{filtered.length} registros</span>
+            </div>
+            {filtered.map((m) => {
+              const statusStyle = STATUS_STYLES[m.status] ?? STATUS_STYLES.pendente;
+              const isFlash = flashRowId === m.id;
+              const isPaid = m.status === "pago" || m.status === "isento";
+
+              return (
+                <div
+                  key={m.id}
+                  className={cn(
+                    "bg-surface-card border border-border-subtle rounded-lg p-4 relative transition-colors",
+                    selected.has(m.id) && "border-brand-red/40 bg-brand-red/5",
+                    isFlash && "animate-flash-green"
+                  )}
+                  style={
+                    isFlash
+                      ? { animation: "flashGreen 1.5s ease-out forwards" }
+                      : undefined
+                  }
+                >
+                  {/* Top row: checkbox + name + status */}
+                  <div className="flex items-start gap-3">
+                    <button onClick={() => toggleSelect(m.id)} className="mt-0.5 text-txt-tertiary hover:text-txt-primary shrink-0">
+                      {selected.has(m.id) ? <CheckSquare size={18} className="text-brand-red" /> : <Square size={18} />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-txt-primary font-medium truncate">
+                          {m.jogador?.apelido || m.jogador?.nome || `Jogador #${m.jogador_id}`}
+                        </p>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium shrink-0",
+                            statusStyle.bg,
+                            statusStyle.text
+                          )}
+                        >
+                          {m.status === "pago" && <Check size={10} />}
+                          {m.status === "atrasado" && <AlertTriangle size={10} />}
+                          {m.status === "pendente" && <Clock size={10} />}
+                          {statusStyle.label}
+                        </span>
+                      </div>
+                      {m.jogador?.apelido && m.jogador?.nome && (
+                        <p className="text-xs text-txt-tertiary">{m.jogador.nome}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Middle row: valor + data */}
+                  <div className="flex items-center justify-between mt-3 ml-8">
+                    <span className="font-mono text-lg text-txt-primary font-semibold">
+                      {formatCurrency(m.valor)}
+                    </span>
+                    <span className="text-xs text-txt-tertiary font-body">
+                      {m.data_pagamento ? formatDate(m.data_pagamento) : ""}
+                    </span>
+                  </div>
+
+                  {/* Bottom row: actions */}
+                  <div className="flex items-center justify-end gap-2 mt-3 ml-8 pt-3 border-t border-border-subtle">
+                    {!isPaid && (
+                      <button
+                        onClick={() =>
+                          setQuickPayId(quickPayId === m.id ? null : m.id)
+                        }
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-display uppercase tracking-wider transition-all",
+                          quickPayId === m.id
+                            ? "bg-brand-red text-white"
+                            : "bg-surface-tertiary text-txt-secondary hover:text-emerald-400 hover:bg-emerald-500/10"
+                        )}
+                      >
+                        <DollarSign size={14} />
+                        Pagar
+                      </button>
+                    )}
+                    {isPaid && (
+                      <span className="inline-flex items-center gap-1 text-xs text-emerald-400/60 px-2">
+                        <Check size={14} /> Pago
+                      </span>
+                    )}
+                    <button
+                      onClick={() => openEditMens(m)}
+                      className="h-8 w-8 rounded-lg flex items-center justify-center text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary transition-colors"
+                      title="Editar"
+                    >
+                      <CreditCard size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMens(m.id)}
+                      className={cn(
+                        "h-8 w-8 rounded-lg flex items-center justify-center transition-colors",
+                        deletingId === m.id
+                          ? "bg-red-500/20 text-red-400"
+                          : "text-txt-tertiary hover:text-red-400 hover:bg-red-500/10"
+                      )}
+                      title={deletingId === m.id ? "Confirmar exclusao" : "Excluir"}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  {/* QuickPay popover */}
+                  <AnimatePresence>
+                    {quickPayId === m.id && (
+                      <QuickPayPopover
+                        mensalidade={m}
+                        onConfirm={handleQuickPay}
+                        onClose={() => setQuickPayId(null)}
+                      />
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {/* ===== New Mensalidade Modal ===== */}

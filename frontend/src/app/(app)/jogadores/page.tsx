@@ -362,7 +362,7 @@ export default function JogadoresPage() {
       {/* ─── Header ─────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold uppercase tracking-wide text-txt-primary">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-display font-bold uppercase tracking-wide text-txt-primary">
             Jogadores
           </h1>
           <p className="text-sm text-txt-secondary font-body mt-1">
@@ -427,7 +427,7 @@ export default function JogadoresPage() {
       {/* ─── Bulk action bar ─────────────────────────────────── */}
       {selected.size > 0 && (
         <Card padding="sm">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-sm font-body text-txt-primary">
                 <strong>{selected.size}</strong> selecionado{selected.size !== 1 ? "s" : ""}
@@ -436,7 +436,7 @@ export default function JogadoresPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="secondary" onClick={() => { setBulkField("tipo"); setBulkValue("jogador"); setBulkModalOpen(true); }}>
                 Editar em Massa
               </Button>
@@ -455,35 +455,185 @@ export default function JogadoresPage() {
         </Card>
       )}
 
-      {/* ─── Table ──────────────────────────────────────────── */}
-      <Card padding="none">
-        {/* header */}
-        <div
-          className={cn(
-            "hidden md:grid grid-cols-[auto_2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-4",
-            "px-4 py-3 text-xs font-semibold uppercase tracking-wider",
-            "text-txt-tertiary font-body",
-            "border-b border-border-subtle"
-          )}
-        >
-          <button onClick={toggleSelectAll} className="w-6 flex items-center justify-center text-txt-tertiary hover:text-txt-primary">
-            {selected.size === jogadores.length && jogadores.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-          </button>
-          <span>Nome</span>
-          <span>Apelido</span>
-          <span>Telefone</span>
-          <span>Tipo</span>
-          <span>Status</span>
-          <span className="w-24 text-center">Acoes</span>
-        </div>
+      {/* ─── Desktop Table ────────────────────────────────────── */}
+      <div className="hidden md:block">
+        <Card padding="none">
+          {/* header */}
+          <div
+            className={cn(
+              "grid grid-cols-[auto_2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-4",
+              "px-4 py-3 text-xs font-semibold uppercase tracking-wider",
+              "text-txt-tertiary font-body",
+              "border-b border-border-subtle"
+            )}
+          >
+            <button onClick={toggleSelectAll} className="w-6 flex items-center justify-center text-txt-tertiary hover:text-txt-primary">
+              {selected.size === jogadores.length && jogadores.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+            </button>
+            <span>Nome</span>
+            <span>Apelido</span>
+            <span>Telefone</span>
+            <span>Tipo</span>
+            <span>Status</span>
+            <span className="w-24 text-center">Acoes</span>
+          </div>
 
+          {/* loading */}
+          {loading && (
+            <div>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonTableRow key={i} columns={6} />
+              ))}
+            </div>
+          )}
+
+          {/* empty */}
+          {!loading && jogadores.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Users className="h-12 w-12 text-txt-tertiary" />
+              <p className="text-txt-secondary font-body text-sm">
+                Nenhum jogador encontrado
+              </p>
+              <Button size="sm" onClick={openCreate} icon={<Plus />}>
+                Adicionar Jogador
+              </Button>
+            </div>
+          )}
+
+          {/* rows */}
+          {!loading && jogadores.length > 0 && (
+            <div>
+              <AnimatePresence>
+                {jogadores.map((j, idx) => (
+                  <motion.div
+                    key={j.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    className={cn(
+                      "grid grid-cols-[auto_2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-4",
+                      "items-center px-4 py-3",
+                      "border-b border-border-subtle",
+                      selected.has(j.id) ? "bg-brand-red/5" : "bg-surface-card hover:bg-surface-card-hover",
+                      "transition-colors duration-150"
+                    )}
+                  >
+                    {/* Checkbox */}
+                    <button
+                      onClick={() => toggleSelect(j.id)}
+                      className="w-6 flex items-center justify-center text-txt-tertiary hover:text-txt-primary"
+                    >
+                      {selected.has(j.id) ? <CheckSquare className="h-4 w-4 text-brand-red" /> : <Square className="h-4 w-4" />}
+                    </button>
+
+                    {/* Nome */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 rounded-full bg-surface-tertiary items-center justify-center text-txt-tertiary">
+                        <Users className="h-4 w-4" />
+                      </div>
+                      <span className="text-sm font-medium text-txt-primary font-body truncate">
+                        {j.nome}
+                      </span>
+                    </div>
+
+                    {/* Apelido */}
+                    <span className="text-sm text-txt-secondary font-body truncate">
+                      {j.apelido || "-"}
+                    </span>
+
+                    {/* Telefone */}
+                    <span className="text-sm text-txt-secondary font-mono truncate">
+                      {j.telefone || "-"}
+                    </span>
+
+                    {/* Tipo */}
+                    <div>
+                      <Badge type={j.tipo as "jogador" | "socio"}>
+                        {j.tipo === "jogador" ? "Jogador" : "Socio"}
+                      </Badge>
+                    </div>
+
+                    {/* Status */}
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full",
+                          j.ativo === 1 ? "bg-emerald-400" : "bg-gray-500"
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "text-xs font-body",
+                          j.ativo === 1
+                            ? "text-emerald-400"
+                            : "text-txt-tertiary"
+                        )}
+                      >
+                        {j.ativo === 1 ? "Ativo" : "Inativo"}
+                      </span>
+                    </div>
+
+                    {/* Acoes */}
+                    <div className="flex items-center gap-1 w-24 justify-center">
+                      <Button
+                        variant="icon"
+                        size="sm"
+                        icon={<Edit />}
+                        onClick={() => openEdit(j)}
+                        aria-label={`Editar ${j.nome}`}
+                      />
+                      <Link href={`/jogadores/${j.id}`}>
+                        <Button
+                          variant="icon"
+                          size="sm"
+                          icon={<Eye />}
+                          aria-label={`Ver ${j.nome}`}
+                        />
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(j.id)}
+                        className={cn(
+                          "h-8 w-8 rounded-lg flex items-center justify-center transition-colors",
+                          deletingId === j.id
+                            ? "bg-red-500/20 text-red-400"
+                            : "text-txt-tertiary hover:text-red-400 hover:bg-red-500/10"
+                        )}
+                        title={deletingId === j.id ? "Clique de novo para confirmar" : "Excluir"}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* count */}
+          {!loading && jogadores.length > 0 && (
+            <div className="px-4 py-2 text-xs text-txt-tertiary font-body border-t border-border-subtle">
+              {jogadores.length} jogador{jogadores.length !== 1 ? "es" : ""}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ─── Mobile Cards ────────────────────────────────────────── */}
+      <div className="md:hidden space-y-3">
         {/* loading */}
         {loading && (
-          <div>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonTableRow key={i} columns={6} />
-            ))}
-          </div>
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-surface-card border border-border-subtle rounded-lg p-4 animate-pulse">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-full bg-surface-tertiary" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-3/4 bg-surface-tertiary rounded" />
+                  <div className="h-3 w-1/2 bg-surface-tertiary rounded" />
+                </div>
+              </div>
+            </div>
+          ))
         )}
 
         {/* empty */}
@@ -499,9 +649,18 @@ export default function JogadoresPage() {
           </div>
         )}
 
-        {/* rows */}
+        {/* cards */}
         {!loading && jogadores.length > 0 && (
-          <div>
+          <>
+            {/* Select all + count */}
+            <div className="flex items-center justify-between px-1">
+              <button onClick={toggleSelectAll} className="flex items-center gap-2 text-txt-tertiary hover:text-txt-primary text-sm font-body">
+                {selected.size === jogadores.length && jogadores.length > 0 ? <CheckSquare className="h-4 w-4 text-brand-red" /> : <Square className="h-4 w-4" />}
+                <span>Selecionar todos</span>
+              </button>
+              <span className="text-xs text-txt-tertiary font-body">{jogadores.length} jogador{jogadores.length !== 1 ? "es" : ""}</span>
+            </div>
+
             <AnimatePresence>
               {jogadores.map((j, idx) => (
                 <motion.div
@@ -511,70 +670,61 @@ export default function JogadoresPage() {
                   exit={{ opacity: 0 }}
                   transition={{ delay: idx * 0.03 }}
                   className={cn(
-                    "grid grid-cols-1 md:grid-cols-[auto_2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-2 md:gap-4",
-                    "items-center px-4 py-3",
-                    "border-b border-border-subtle",
-                    selected.has(j.id) ? "bg-brand-red/5" : "bg-surface-card hover:bg-surface-card-hover",
+                    "bg-surface-card border border-border-subtle rounded-lg p-4",
+                    selected.has(j.id) ? "border-brand-red/40 bg-brand-red/5" : "hover:bg-surface-card-hover",
                     "transition-colors duration-150"
                   )}
                 >
-                  {/* Checkbox */}
-                  <button
-                    onClick={() => toggleSelect(j.id)}
-                    className="w-6 flex items-center justify-center text-txt-tertiary hover:text-txt-primary"
-                  >
-                    {selected.has(j.id) ? <CheckSquare className="h-4 w-4 text-brand-red" /> : <Square className="h-4 w-4" />}
-                  </button>
-
-                  {/* Nome */}
-                  <div className="flex items-center gap-2">
-                    <div className="hidden md:flex h-8 w-8 rounded-full bg-surface-tertiary items-center justify-center text-txt-tertiary">
-                      <Users className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium text-txt-primary font-body truncate">
-                      {j.nome}
-                    </span>
-                  </div>
-
-                  {/* Apelido */}
-                  <span className="text-sm text-txt-secondary font-body truncate">
-                    {j.apelido || "-"}
-                  </span>
-
-                  {/* Telefone */}
-                  <span className="text-sm text-txt-secondary font-mono truncate">
-                    {j.telefone || "-"}
-                  </span>
-
-                  {/* Tipo */}
-                  <div>
-                    <Badge type={j.tipo as "jogador" | "socio"}>
-                      {j.tipo === "jogador" ? "Jogador" : "Socio"}
-                    </Badge>
-                  </div>
-
-                  {/* Status */}
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={cn(
-                        "h-2 w-2 rounded-full",
-                        j.ativo === 1 ? "bg-emerald-400" : "bg-gray-500"
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "text-xs font-body",
-                        j.ativo === 1
-                          ? "text-emerald-400"
-                          : "text-txt-tertiary"
-                      )}
+                  {/* Top: checkbox + name + type badge */}
+                  <div className="flex items-start gap-3">
+                    <button
+                      onClick={() => toggleSelect(j.id)}
+                      className="mt-0.5 shrink-0 text-txt-tertiary hover:text-txt-primary"
                     >
-                      {j.ativo === 1 ? "Ativo" : "Inativo"}
-                    </span>
+                      {selected.has(j.id) ? <CheckSquare className="h-4 w-4 text-brand-red" /> : <Square className="h-4 w-4" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-txt-primary font-body truncate">
+                            {j.nome}
+                          </p>
+                          {j.apelido && (
+                            <p className="text-xs text-txt-secondary font-body truncate">{j.apelido}</p>
+                          )}
+                        </div>
+                        <Badge type={j.tipo as "jogador" | "socio"}>
+                          {j.tipo === "jogador" ? "Jogador" : "Socio"}
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Acoes */}
-                  <div className="flex items-center gap-1 w-24 justify-center">
+                  {/* Middle: status + phone */}
+                  <div className="flex items-center justify-between mt-2 ml-7">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full",
+                          j.ativo === 1 ? "bg-emerald-400" : "bg-gray-500"
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "text-xs font-body",
+                          j.ativo === 1 ? "text-emerald-400" : "text-txt-tertiary"
+                        )}
+                      >
+                        {j.ativo === 1 ? "Ativo" : "Inativo"}
+                      </span>
+                    </div>
+                    {j.telefone && (
+                      <span className="text-xs text-txt-secondary font-mono">{j.telefone}</span>
+                    )}
+                  </div>
+
+                  {/* Bottom: actions */}
+                  <div className="flex items-center justify-end gap-2 mt-3 ml-7 pt-3 border-t border-border-subtle">
                     <Button
                       variant="icon"
                       size="sm"
@@ -606,16 +756,9 @@ export default function JogadoresPage() {
                 </motion.div>
               ))}
             </AnimatePresence>
-          </div>
+          </>
         )}
-
-        {/* count */}
-        {!loading && jogadores.length > 0 && (
-          <div className="px-4 py-2 text-xs text-txt-tertiary font-body border-t border-border-subtle">
-            {jogadores.length} jogador{jogadores.length !== 1 ? "es" : ""}
-          </div>
-        )}
-      </Card>
+      </div>
 
       {/* ═══ MODAL ═══════════════════════════════════════════ */}
       <Modal

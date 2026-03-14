@@ -269,13 +269,13 @@ export default function FinanceiroPage() {
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-4 sm:space-y-8 animate-fade-in">
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                              */}
       {/* ------------------------------------------------------------------ */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl lg:text-4xl uppercase tracking-wide text-txt-primary">
+          <h1 className="font-display text-xl sm:text-3xl lg:text-4xl uppercase tracking-wide text-txt-primary">
             Financeiro
           </h1>
           <p className="text-txt-secondary font-body mt-1">
@@ -284,7 +284,7 @@ export default function FinanceiroPage() {
         </div>
         <button
           onClick={openNewModal}
-          className="flex items-center gap-2 bg-brand-red hover:bg-brand-red-hover text-white font-body font-semibold px-5 py-2.5 rounded-lg shadow-brand transition-colors"
+          className="flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-red-hover text-white font-body font-semibold px-5 py-2.5 rounded-lg shadow-brand transition-colors w-full sm:w-auto"
         >
           <Plus size={18} />
           Nova Transacao
@@ -363,7 +363,8 @@ export default function FinanceiroPage() {
           Fluxo Mensal
         </h2>
         {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={320}>
+          <div className="h-[200px] sm:h-[320px]">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} barGap={4}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1F1F27" vertical={false} />
               <XAxis
@@ -385,6 +386,7 @@ export default function FinanceiroPage() {
               <Bar dataKey="saidas" name="Saidas" fill="#3A3A48" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         ) : (
           <p className="text-txt-tertiary text-center py-12 font-body">
             Sem dados de fluxo mensal
@@ -395,7 +397,7 @@ export default function FinanceiroPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Filter Bar                                                          */}
       {/* ------------------------------------------------------------------ */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
         {/* Type toggles */}
         <div className="flex rounded-lg overflow-hidden border border-border">
           {(["todas", "entrada", "saida"] as FilterTipo[]).map((t) => (
@@ -468,11 +470,12 @@ export default function FinanceiroPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Transactions Table                                                  */}
       {/* ------------------------------------------------------------------ */}
+      {/* Desktop Table */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.4 }}
-        className="bg-surface-card border border-border-subtle rounded-lg shadow-card overflow-hidden"
+        className="hidden md:block bg-surface-card border border-border-subtle rounded-lg shadow-card overflow-hidden"
       >
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -540,6 +543,58 @@ export default function FinanceiroPage() {
             </tbody>
           </table>
         </div>
+      </motion.div>
+
+      {/* Mobile Transaction Cards */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4, duration: 0.4 }}
+        className="md:hidden space-y-3"
+      >
+        {transacoes.length === 0 ? (
+          <div className="bg-surface-card border border-border-subtle rounded-lg p-8 text-center">
+            <p className="text-txt-tertiary font-body">Nenhuma transacao encontrada</p>
+          </div>
+        ) : (
+          transacoes.map((t) => (
+            <div
+              key={t.id}
+              onClick={() => openEditModal(t)}
+              className="bg-surface-card border border-border-subtle rounded-lg p-4 cursor-pointer hover:bg-surface-card-hover transition-colors"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-body text-txt-primary truncate">
+                    {t.descricao || categoriaLabel(t.categoria)}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs font-body text-txt-tertiary">
+                      {formatDate(t.data)}
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-block px-2 py-0.5 rounded-full text-xs font-body border",
+                        CATEGORIA_COLORS[t.categoria] || CATEGORIA_COLORS.outros
+                      )}
+                    >
+                      {categoriaLabel(t.categoria)}
+                    </span>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    "text-sm font-mono font-semibold whitespace-nowrap shrink-0",
+                    t.tipo === "entrada" ? "text-green-400" : "text-red-400"
+                  )}
+                >
+                  {t.tipo === "entrada" ? "+" : "-"}
+                  {formatCurrency(t.valor)}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
       </motion.div>
 
       {/* ------------------------------------------------------------------ */}
@@ -620,7 +675,7 @@ export default function FinanceiroPage() {
           </div>
 
           {/* Valor + Data row */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">
                 Valor (R$)

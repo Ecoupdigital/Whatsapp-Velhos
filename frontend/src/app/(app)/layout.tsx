@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import Sidebar from "@/components/layout/Sidebar";
+import MobileNav from "@/components/layout/MobileNav";
 
 const COLLAPSE_KEY = "sidebar-collapsed";
 
@@ -12,28 +13,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  const syncCollapsed = useCallback(() => {
+    const val = localStorage.getItem(COLLAPSE_KEY);
+    setSidebarCollapsed(val === "true");
+  }, []);
+
   useEffect(() => {
-    const stored = localStorage.getItem(COLLAPSE_KEY);
-    if (stored !== null) {
-      setSidebarCollapsed(stored === "true");
-    }
+    syncCollapsed();
 
-    const handleStorage = () => {
-      const val = localStorage.getItem(COLLAPSE_KEY);
-      setSidebarCollapsed(val === "true");
-    };
-
+    const handleStorage = () => syncCollapsed();
     window.addEventListener("storage", handleStorage);
-    // Also listen for clicks to detect same-tab changes
-    const interval = setInterval(() => {
-      const val = localStorage.getItem(COLLAPSE_KEY);
-      setSidebarCollapsed(val === "true");
-    }, 300);
 
     return () => {
       window.removeEventListener("storage", handleStorage);
-      clearInterval(interval);
     };
+  }, [syncCollapsed]);
+
+  // Callback for Sidebar to notify layout of collapse changes (replaces localStorage polling)
+  const handleCollapseChange = useCallback((collapsed: boolean) => {
+    setSidebarCollapsed(collapsed);
   }, []);
 
   useEffect(() => {
@@ -54,17 +52,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  // On mobile: no margin (sidebar hidden, bottom nav shown)
+  // On desktop: margin matches sidebar width
+  const desktopMargin = sidebarCollapsed ? 72 : 280;
+
   return (
     <div className="flex min-h-screen bg-surface-primary">
-      <Sidebar />
+      <Sidebar onCollapseChange={handleCollapseChange} />
       <main
-        className="flex-1 transition-all duration-300 p-6 lg:p-8"
-        style={{
-          marginLeft: sidebarCollapsed ? 72 : 280,
-        }}
+        id="app-main"
+        className="flex-1 transition-all duration-300 p-3 sm:p-4 md:p-6 lg:p-8 pb-24 md:pb-6 lg:pb-8"
       >
         {children}
       </main>
+      <MobileNav />
+      <style>{`
+        @media (min-width: 768px) {
+          #app-main {
+            margin-left: ${desktopMargin}px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

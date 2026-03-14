@@ -232,7 +232,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl space-y-4 sm:space-y-8 px-4 py-4 sm:py-8 sm:px-6 lg:px-8">
       {/* ------------------------------------------------------------------ */}
       {/* Greeting                                                           */}
       {/* ------------------------------------------------------------------ */}
@@ -240,7 +240,7 @@ export default function DashboardPage() {
         className="animate-fade-in"
         style={{ animationDelay: "0ms" }}
       >
-        <h1 className="font-display text-3xl font-bold tracking-tight text-txt-primary">
+        <h1 className="font-display text-xl sm:text-3xl font-bold tracking-tight text-txt-primary">
           Fala, Jonathan!
         </h1>
         <p className="mt-1 text-sm text-txt-secondary">{greetingDate()}</p>
@@ -397,7 +397,8 @@ export default function DashboardPage() {
               Fluxo de Caixa Mensal
             </h2>
             {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <div className="h-[200px] sm:h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={chartData}
                   margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
@@ -441,6 +442,7 @@ export default function DashboardPage() {
                   />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             ) : (
               <div className="flex h-64 items-center justify-center">
                 <p className="text-sm text-txt-tertiary">
@@ -534,7 +536,7 @@ export default function DashboardPage() {
                 {data.ultimos_pagamentos.slice(0, 5).map((pag, idx) => (
                   <div
                     key={pag.id}
-                    className="animate-fade-in flex items-center gap-4 rounded-lg border border-border-subtle bg-surface-secondary px-4 py-3 transition-colors hover:border-border"
+                    className="animate-fade-in flex items-center gap-3 sm:gap-4 rounded-lg border border-border-subtle bg-surface-secondary px-3 sm:px-4 py-3 transition-colors hover:border-border"
                     style={{ animationDelay: `${480 + idx * 50}ms` }}
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-tertiary">

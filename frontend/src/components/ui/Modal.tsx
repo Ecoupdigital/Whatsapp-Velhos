@@ -23,10 +23,10 @@ interface ModalProps {
 }
 
 const sizeMap = {
-  sm: "max-w-sm",
-  md: "max-w-md",
-  lg: "max-w-lg",
-  xl: "max-w-xl",
+  sm: "md:max-w-sm",
+  md: "md:max-w-md",
+  lg: "md:max-w-lg",
+  xl: "md:max-w-xl",
 };
 
 function ModalPortal({ children }: { children: ReactNode }) {
@@ -102,7 +102,8 @@ function Modal({
             transition={{ duration: 0.2 }}
             onClick={handleBackdropClick}
           >
-            <div className="flex min-h-full items-center justify-center p-4">
+            {/* Mobile: near-fullscreen (inset-2), Desktop: centered with max-w */}
+            <div className="flex min-h-full items-center justify-center p-2 md:p-4">
               <motion.div
                 role="dialog"
                 aria-modal="true"
@@ -120,20 +121,31 @@ function Modal({
                   transition: { duration: 0.15 },
                 }}
                 className={cn(
-                  "relative w-full my-8",
+                  "relative w-full",
+                  // Mobile: near-fullscreen with safe-area padding
+                  "my-0 md:my-8",
+                  "min-h-[calc(100vh-1rem)] md:min-h-0",
+                  "max-h-[calc(100vh-1rem)] md:max-h-[calc(100vh-4rem)]",
+                  "overflow-y-auto",
+                  // Desktop: respect size map (mobile is full-width)
                   sizeMap[size],
                   "bg-surface-elevated",
                   "border border-border",
-                  "rounded-xl shadow-2xl shadow-black/40",
+                  "rounded-lg md:rounded-xl shadow-2xl shadow-black/40",
+                  // Safe area padding for iOS
+                  "pb-[env(safe-area-inset-bottom)]",
                   className
                 )}
+                style={{
+                  paddingBottom: "env(safe-area-inset-bottom, 0px)",
+                }}
               >
                 {/* Close button */}
                 <button
                   onClick={onClose}
                   className={cn(
                     "absolute top-3 right-3 z-10",
-                    "h-8 w-8 rounded-lg",
+                    "h-10 w-10 md:h-8 md:w-8 rounded-lg",
                     "flex items-center justify-center",
                     "text-txt-tertiary",
                     "hover:text-txt-primary hover:bg-surface-tertiary",
@@ -142,7 +154,7 @@ function Modal({
                   )}
                   aria-label="Fechar"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-5 w-5 md:h-4 md:w-4" />
                 </button>
 
                 {children}
@@ -177,7 +189,7 @@ function ModalHeader({ children, className }: ModalSectionProps) {
 }
 
 function ModalBody({ children, className }: ModalSectionProps) {
-  return <div className={cn("px-5 py-4", className)}>{children}</div>;
+  return <div className={cn("px-4 md:px-5 py-4 overflow-y-auto", className)}>{children}</div>;
 }
 
 function ModalFooter({ children, className }: ModalSectionProps) {

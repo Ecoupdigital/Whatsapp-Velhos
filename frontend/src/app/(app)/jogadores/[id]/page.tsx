@@ -200,7 +200,7 @@ export default function JogadorDetailPage() {
             <Button variant="icon" size="sm" icon={<ArrowLeft />} aria-label="Voltar" />
           </Link>
           <div>
-            <h1 className="text-2xl font-display font-bold uppercase tracking-wide text-txt-primary">
+            <h1 className="text-xl sm:text-2xl font-display font-bold uppercase tracking-wide text-txt-primary">
               {jogador.nome}
             </h1>
             {jogador.apelido && (
@@ -211,16 +211,18 @@ export default function JogadorDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button
             variant="secondary"
             icon={<MessageCircle />}
             onClick={() => setMsgModalOpen(true)}
+            className="flex-1 sm:flex-initial"
           >
-            Enviar Mensagem
+            <span className="hidden sm:inline">Enviar Mensagem</span>
+            <span className="sm:hidden">Mensagem</span>
           </Button>
-          <Link href="/jogadores">
-            <Button variant="secondary" icon={<Edit />}>
+          <Link href="/jogadores" className="flex-1 sm:flex-initial">
+            <Button variant="secondary" icon={<Edit />} className="w-full">
               Editar
             </Button>
           </Link>
@@ -368,13 +370,13 @@ export default function JogadorDetailPage() {
                 </div>
               )}
 
-              {/* rows */}
+              {/* Desktop rows */}
               {!loadingMensalidades &&
                 mensalidades.map((m) => (
                   <div
                     key={m.id}
                     className={cn(
-                      "grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1.5fr] gap-2 sm:gap-4",
+                      "hidden sm:grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4",
                       "items-center px-4 py-3",
                       "border-b border-border-subtle last:border-b-0",
                       "bg-surface-card hover:bg-surface-card-hover",
@@ -405,6 +407,47 @@ export default function JogadorDetailPage() {
                         ? formatDate(m.data_pagamento)
                         : "-"}
                     </span>
+                  </div>
+                ))}
+
+              {/* Mobile cards */}
+              {!loadingMensalidades &&
+                mensalidades.map((m) => (
+                  <div
+                    key={`mobile-${m.id}`}
+                    className={cn(
+                      "sm:hidden px-4 py-3",
+                      "border-b border-border-subtle last:border-b-0",
+                      "bg-surface-card hover:bg-surface-card-hover",
+                      "transition-colors duration-150"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-body text-txt-primary font-medium">
+                        {formatMonth(m.mes_referencia)}
+                      </span>
+                      <Badge
+                        status={
+                          m.status as
+                            | "pago"
+                            | "pendente"
+                            | "atrasado"
+                            | "isento"
+                        }
+                      >
+                        {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-sm font-mono text-txt-primary">
+                        {formatCurrency(m.valor)}
+                      </span>
+                      <span className="text-xs font-body text-txt-tertiary">
+                        {m.data_pagamento
+                          ? formatDate(m.data_pagamento)
+                          : ""}
+                      </span>
+                    </div>
                   </div>
                 ))}
             </Card>

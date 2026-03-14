@@ -69,7 +69,11 @@ const navSections: NavSection[] = [
   },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  onCollapseChange?: (collapsed: boolean) => void;
+}
+
+export default function Sidebar({ onCollapseChange }: SidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
@@ -85,6 +89,7 @@ export default function Sidebar() {
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem(COLLAPSE_KEY, String(next));
+    onCollapseChange?.(next);
   };
 
   const isActive = (href: string) => {
@@ -95,7 +100,7 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-surface-sidebar border-r border-border-subtle flex flex-col transition-all duration-300 z-40",
+        "fixed left-0 top-0 h-screen bg-surface-sidebar border-r border-border-subtle hidden md:flex flex-col transition-all duration-300 z-40",
         collapsed ? "w-[72px]" : "w-[280px]"
       )}
     >
