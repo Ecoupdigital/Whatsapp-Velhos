@@ -20,6 +20,50 @@ router = APIRouter(prefix="/api/mensalidades", tags=["mensalidades"], dependenci
 
 VALOR_JOGADOR = 60.0
 VALOR_SOCIO = 20.0
+VALOR_MULTA = 65.0
+
+
+def _atualizar_atrasados(db: Session, mes: str):
+    """Se passou do vencimento, muda pendentes para atrasado e ajusta valor."""
+    # Ler dia_vencimento das configs (padrao 15)
+    cfg = db.query(Configuracao).filter(Configuracao.chave == "dia_vencimento").first()
+    dia_venc = int(cfg.valor) if cfg and cfg.valor else 15
+
+    cfg_multa = db.query(Configuracao).filter(Configuracao.chave == "valor_multa").first()
+    valor_multa = float(cfg_multa.valor) if cfg_multa and cfg_multa.valor else VALOR_MULTA
+
+    # Verificar se ja passou do vencimento para este mes
+    try:
+        ano, mes_num = mes.split("-")
+        from calendar import monthrange
+        ultimo_dia = monthrange(int(ano), int(mes_num))[1]
+        dia_real = min(dia_venc, ultimo_dia)
+        data_venc = datetime(int(ano), int(mes_num), dia_real)
+    except (ValueError, IndexError):
+        return
+
+    hoje = datetime.now()
+    if hoje <= data_venc:
+        return  # Ainda nao venceu
+
+    # Buscar pendentes desse mes e marcar como atrasado
+    pendentes = (
+        db.query(Mensalidade)
+        .options(joinedload(Mensalidade.jogador))
+        .filter(Mensalidade.mes_referencia == mes, Mensalidade.status == "pendente")
+        .all()
+    )
+
+    changed = False
+    for m in pendentes:
+        m.status = "atrasado"
+        # Aplicar multa so para jogadores (socios mantem valor original)
+        if m.jogador and m.jogador.tipo == "jogador":
+            m.valor = valor_multa
+        changed = True
+
+    if changed:
+        db.commit()
 
 
 @router.get("", response_model=list[MensalidadeOut])
@@ -28,6 +72,10 @@ def listar(
     status: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
+    # Auto-atualizar atrasados antes de listar
+    if mes:
+        _atualizar_atrasados(db, mes)
+
     q = db.query(Mensalidade).options(joinedload(Mensalidade.jogador))
     if mes:
         q = q.filter(Mensalidade.mes_referencia == mes)
@@ -121,6 +169,7 @@ def gerar_mensalidades(req: GerarMensalidadesRequest, db: Session = Depends(get_
 
 @router.get("/resumo/{mes}", response_model=MensalidadeResumo)
 def resumo(mes: str, db: Session = Depends(get_db)):
+    _atualizar_atrasados(db, mes)
     mensalidades = db.query(Mensalidade).filter(Mensalidade.mes_referencia == mes).all()
 
     pagos = sum(1 for m in mensalidades if m.status == "pago")
