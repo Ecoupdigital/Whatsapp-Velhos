@@ -16,6 +16,16 @@
     overflow-x: hidden;
   }
 
+  /* Prevent zoom on input focus in iOS (requires font-size >= 16px) */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  @media (min-width: 768px) {
+    input, select, textarea {
+      font-size: inherit !important;
+    }
+  }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar {
     width: 6px;
