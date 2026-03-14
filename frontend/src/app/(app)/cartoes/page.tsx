@@ -284,7 +284,7 @@ export default function CartoesPage() {
   /* ── render ──────────────────────────────────────────────── */
   return (
     <motion.div
-      className="space-y-6 animate-fade-in"
+      className="space-y-6 animate-fade-in overflow-x-hidden"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
@@ -299,15 +299,15 @@ export default function CartoesPage() {
             Controle de distribuicao e acerto de cartoes
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           {/* Event selector */}
           {!loading && eventos.length > 0 && (
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <select
                 value={selectedEventoId ?? ""}
                 onChange={(e) => setSelectedEventoId(Number(e.target.value))}
                 className={cn(
-                  "h-10 rounded-lg px-3 pr-9 appearance-none",
+                  "w-full sm:w-auto h-10 rounded-lg px-3 pr-9 appearance-none",
                   "bg-surface-tertiary border border-border",
                   "text-txt-primary text-sm font-body",
                   "focus:outline-none focus:ring-2 focus:ring-brand-red/50 focus:border-brand-red",
@@ -327,6 +327,7 @@ export default function CartoesPage() {
             icon={<Plus />}
             onClick={() => setModalOpen(true)}
             disabled={!selectedEventoId}
+            className="w-full sm:w-auto justify-center"
           >
             Distribuir Cartoes
           </Button>
@@ -352,9 +353,8 @@ export default function CartoesPage() {
         </div>
       ) : null}
 
-      {/* Table */}
-      <Card padding="none" className="overflow-hidden">
-        {/* table header */}
+      {/* Desktop Table */}
+      <Card padding="none" className="overflow-hidden hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -435,6 +435,69 @@ export default function CartoesPage() {
           </table>
         </div>
       </Card>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {loadingCartoes ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} padding="md">
+              <Skeleton className="h-4 w-32 mb-3" />
+              <Skeleton className="h-3 w-full mb-2" />
+              <Skeleton className="h-3 w-3/4" />
+            </Card>
+          ))
+        ) : cartoes.length === 0 ? (
+          <Card padding="md">
+            <EmptyState
+              icon={<Ticket />}
+              title="Nenhum cartao distribuido"
+              description="Clique em Distribuir Cartoes para comecar"
+            />
+          </Card>
+        ) : (
+          cartoes.map((c) => (
+            <Card key={c.id} padding="md" className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-txt-primary truncate">
+                  {c.jogador?.apelido || c.jogador?.nome || `#${c.jogador_id}`}
+                </span>
+                <StatusBadge status={c.status} />
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                <div>
+                  <span className="text-txt-tertiary uppercase tracking-wider font-body">Cartoes</span>
+                  <p className="text-txt-secondary font-mono mt-0.5">#{c.numero_inicio} - #{c.numero_fim}</p>
+                </div>
+                <div>
+                  <span className="text-txt-tertiary uppercase tracking-wider font-body">Qtd</span>
+                  <p className="text-txt-secondary mt-0.5">{c.quantidade}</p>
+                </div>
+                <div>
+                  <span className="text-txt-tertiary uppercase tracking-wider font-body">Vendidos</span>
+                  <div className="mt-0.5">
+                    <InlineEdit
+                      value={c.vendidos}
+                      onSave={(v) => handleUpdateField(c.id, "vendidos", v)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-txt-tertiary uppercase tracking-wider font-body">Valor Unit.</span>
+                  <p className="text-txt-secondary font-mono mt-0.5">{formatCurrency(c.valor_unitario)}</p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-border-subtle flex items-center justify-between">
+                <span className="text-xs text-txt-tertiary uppercase tracking-wider font-body">Acertado</span>
+                <InlineEdit
+                  value={c.valor_acertado}
+                  onSave={(v) => handleUpdateField(c.id, "valor_acertado", v)}
+                  prefix="R$ "
+                />
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
 
       {/* ── Distribuir Modal ─────────────────────────────────── */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} size="md">

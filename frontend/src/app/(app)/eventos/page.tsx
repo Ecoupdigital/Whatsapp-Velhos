@@ -209,7 +209,7 @@ export default function EventosPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in overflow-x-hidden">
       {/* ── Header ───────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-txt-primary uppercase tracking-wider">
@@ -228,7 +228,7 @@ export default function EventosPage() {
       </div>
 
       {/* ── Filter Tabs ──────────────────────────────────────── */}
-      <div className="flex gap-1 p-1 bg-surface-secondary rounded-lg overflow-x-auto">
+      <div className="flex gap-1 p-1 bg-surface-secondary rounded-lg overflow-x-auto scrollbar-none">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -295,11 +295,11 @@ export default function EventosPage() {
                       hoverable
                       className="group cursor-pointer transition-all duration-300 hover:-translate-y-[2px] hover:shadow-lg hover:shadow-black/30"
                     >
-                      <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-start justify-between gap-2 mb-3">
                         {/* Type Badge */}
                         <span
                           className={cn(
-                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
+                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium shrink-0",
                             tipoStyle.bg,
                             tipoStyle.text
                           )}
@@ -308,11 +308,11 @@ export default function EventosPage() {
                           {evento.tipo.charAt(0).toUpperCase() + evento.tipo.slice(1)}
                         </span>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           {/* Status Badge */}
                           <span
                             className={cn(
-                              "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium",
+                              "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap",
                               statusStyle.bg,
                               statusStyle.text
                             )}

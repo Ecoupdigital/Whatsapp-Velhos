@@ -310,31 +310,33 @@ export default function JogosPage() {
                   {jogo.tipo}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-lg sm:text-xl font-display font-bold text-txt-primary uppercase tracking-wide">
-                    Velhos Parceiros <span className="text-txt-tertiary font-light mx-2">vs</span> {jogo.adversario}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-base sm:text-xl font-display font-bold text-txt-primary uppercase tracking-wide break-words">
+                    Velhos Parceiros <span className="text-txt-tertiary font-light mx-1 sm:mx-2">vs</span> {jogo.adversario}
                   </p>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-txt-secondary font-body">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-txt-secondary font-body">
                     <span className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5" />
+                      <Calendar className="h-3.5 w-3.5 shrink-0" />
                       {formatDate(jogo.data)}
                     </span>
                     {jogo.horario && jogo.horario !== "00:00" && (
                       <span className="flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5" />
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
                         {jogo.horario}
                       </span>
                     )}
                     {jogo.local && (
                       <span className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {jogo.local}
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{jogo.local}</span>
                       </span>
                     )}
                   </div>
                 </div>
-                {renderEditDeleteButtons(jogo)}
+                <div className="shrink-0">
+                  {renderEditDeleteButtons(jogo)}
+                </div>
               </div>
             </div>
           </div>
@@ -362,38 +364,42 @@ export default function JogosPage() {
             "group"
           )}
         >
-          <div className="relative px-4 py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              <div className="flex items-center gap-2 text-xs text-txt-tertiary font-body shrink-0">
-                <Calendar className="h-3 w-3" />
-                <span>{formatDate(jogo.data)}</span>
-              </div>
-              {jogo.horario && jogo.horario !== "00:00" && (
-                <div className="flex items-center gap-1 text-xs text-txt-tertiary font-body shrink-0">
-                  <Clock className="h-3 w-3" />
-                  <span>{jogo.horario}</span>
+          <div className="relative px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0 flex-wrap">
+                <div className="flex items-center gap-2 text-xs text-txt-tertiary font-body shrink-0">
+                  <Calendar className="h-3 w-3" />
+                  <span>{formatDate(jogo.data)}</span>
                 </div>
-              )}
-              <p className="font-display font-bold text-sm text-txt-primary uppercase tracking-wide truncate">
-                {jogo.adversario}
-              </p>
-              {jogo.local && (
-                <span className="hidden sm:flex items-center gap-1 text-xs text-txt-tertiary font-body shrink-0">
-                  <MapPin className="h-3 w-3" />
-                  {jogo.local}
-                </span>
-              )}
-              <span
-                className={cn(
-                  "px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider shrink-0",
-                  tipoStyle.bg,
-                  tipoStyle.text
+                {jogo.horario && jogo.horario !== "00:00" && (
+                  <div className="flex items-center gap-1 text-xs text-txt-tertiary font-body shrink-0">
+                    <Clock className="h-3 w-3" />
+                    <span>{jogo.horario}</span>
+                  </div>
                 )}
-              >
-                {jogo.tipo}
-              </span>
+                <p className="font-display font-bold text-sm text-txt-primary uppercase tracking-wide truncate">
+                  {jogo.adversario}
+                </p>
+                {jogo.local && (
+                  <span className="hidden sm:flex items-center gap-1 text-xs text-txt-tertiary font-body shrink-0">
+                    <MapPin className="h-3 w-3" />
+                    {jogo.local}
+                  </span>
+                )}
+                <span
+                  className={cn(
+                    "px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider shrink-0",
+                    tipoStyle.bg,
+                    tipoStyle.text
+                  )}
+                >
+                  {jogo.tipo}
+                </span>
+              </div>
+              <div className="shrink-0">
+                {renderEditDeleteButtons(jogo)}
+              </div>
             </div>
-            {renderEditDeleteButtons(jogo)}
           </div>
         </div>
       </motion.div>
@@ -479,30 +485,30 @@ export default function JogosPage() {
             </div>
 
             {/* Scoreboard */}
-            <div className="flex items-center justify-between">
-              <div className="flex-1 text-left">
-                <p className="text-xs text-txt-tertiary font-body uppercase tracking-widest mb-1">{leftLabel}</p>
+            <div className="flex items-center justify-between gap-1">
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-[10px] sm:text-xs text-txt-tertiary font-body uppercase tracking-widest mb-1">{leftLabel}</p>
                 <p className={cn(
-                  "text-base sm:text-lg font-display font-bold uppercase tracking-wide",
+                  "text-sm sm:text-lg font-display font-bold uppercase tracking-wide truncate",
                   leftTeam === "Velhos Parceiros" ? "text-brand-red" : "text-txt-primary"
                 )}>
                   {leftTeam}
                 </p>
               </div>
 
-              <div className="flex-shrink-0 mx-4 sm:mx-8">
+              <div className="flex-shrink-0 mx-2 sm:mx-8">
                 <div>
-                  <div className="flex items-center gap-2 sm:gap-4">
+                  <div className="flex items-center gap-1.5 sm:gap-4">
                     <span className={cn(
-                      "text-4xl sm:text-5xl lg:text-6xl font-display font-bold tabular-nums",
+                      "text-3xl sm:text-5xl lg:text-6xl font-display font-bold tabular-nums",
                       leftGols > rightGols ? "text-emerald-400" :
                       leftGols < rightGols ? "text-red-400" : "text-yellow-400"
                     )}>
                       {leftGols}
                     </span>
-                    <span className="text-lg sm:text-xl text-txt-tertiary font-display font-light">x</span>
+                    <span className="text-base sm:text-xl text-txt-tertiary font-display font-light">x</span>
                     <span className={cn(
-                      "text-4xl sm:text-5xl lg:text-6xl font-display font-bold tabular-nums",
+                      "text-3xl sm:text-5xl lg:text-6xl font-display font-bold tabular-nums",
                       rightGols > leftGols ? "text-emerald-400" :
                       rightGols < leftGols ? "text-red-400" : "text-yellow-400"
                     )}>
@@ -523,10 +529,10 @@ export default function JogosPage() {
                 </div>
               </div>
 
-              <div className="flex-1 text-right">
-                <p className="text-xs text-txt-tertiary font-body uppercase tracking-widest mb-1">{rightLabel}</p>
+              <div className="flex-1 min-w-0 text-right">
+                <p className="text-[10px] sm:text-xs text-txt-tertiary font-body uppercase tracking-widest mb-1">{rightLabel}</p>
                 <p className={cn(
-                  "text-base sm:text-lg font-display font-bold uppercase tracking-wide",
+                  "text-sm sm:text-lg font-display font-bold uppercase tracking-wide truncate",
                   rightTeam === "Velhos Parceiros" ? "text-brand-red" : "text-txt-primary"
                 )}>
                   {rightTeam}
@@ -589,7 +595,7 @@ export default function JogosPage() {
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in overflow-x-hidden">
       {/* ── Header ───────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-txt-primary uppercase tracking-wider">

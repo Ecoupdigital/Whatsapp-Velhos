@@ -269,7 +269,7 @@ export default function FinanceiroPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-8 animate-fade-in">
+    <div className="space-y-4 sm:space-y-8 animate-fade-in overflow-x-hidden">
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                              */}
       {/* ------------------------------------------------------------------ */}
@@ -399,13 +399,13 @@ export default function FinanceiroPage() {
       {/* ------------------------------------------------------------------ */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
         {/* Type toggles */}
-        <div className="flex rounded-lg overflow-hidden border border-border">
+        <div className="flex rounded-lg overflow-hidden border border-border w-full sm:w-auto">
           {(["todas", "entrada", "saida"] as FilterTipo[]).map((t) => (
             <button
               key={t}
               onClick={() => setFiltroTipo(t)}
               className={cn(
-                "px-4 py-2 text-sm font-body transition-colors capitalize",
+                "flex-1 sm:flex-none px-4 py-2 text-sm font-body transition-colors capitalize",
                 filtroTipo === t
                   ? "bg-brand-red text-white"
                   : "bg-surface-tertiary text-txt-secondary hover:text-txt-primary"
@@ -417,11 +417,11 @@ export default function FinanceiroPage() {
         </div>
 
         {/* Category dropdown */}
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <select
             value={filtroCategoria}
             onChange={(e) => setFiltroCategoria(e.target.value)}
-            className="appearance-none bg-surface-tertiary border border-border rounded-lg px-4 py-2 pr-8 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors cursor-pointer"
+            className="w-full sm:w-auto appearance-none bg-surface-tertiary border border-border rounded-lg px-4 py-2 pr-8 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors cursor-pointer"
           >
             <option value="">Todas categorias</option>
             {CATEGORIAS.map((c) => (
@@ -437,20 +437,22 @@ export default function FinanceiroPage() {
         </div>
 
         {/* Date range */}
-        <input
-          type="date"
-          value={filtroDataInicio}
-          onChange={(e) => setFiltroDataInicio(e.target.value)}
-          className="bg-surface-tertiary border border-border rounded-lg px-3 py-2 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
-          placeholder="Data inicio"
-        />
-        <input
-          type="date"
-          value={filtroDataFim}
-          onChange={(e) => setFiltroDataFim(e.target.value)}
-          className="bg-surface-tertiary border border-border rounded-lg px-3 py-2 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
-          placeholder="Data fim"
-        />
+        <div className="grid grid-cols-2 sm:flex gap-3 w-full sm:w-auto">
+          <input
+            type="date"
+            value={filtroDataInicio}
+            onChange={(e) => setFiltroDataInicio(e.target.value)}
+            className="w-full sm:w-auto bg-surface-tertiary border border-border rounded-lg px-3 py-2 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
+            placeholder="Data inicio"
+          />
+          <input
+            type="date"
+            value={filtroDataFim}
+            onChange={(e) => setFiltroDataFim(e.target.value)}
+            className="w-full sm:w-auto bg-surface-tertiary border border-border rounded-lg px-3 py-2 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red transition-colors"
+            placeholder="Data fim"
+          />
+        </div>
 
         {(filtroTipo !== "todas" || filtroCategoria || filtroDataInicio || filtroDataFim) && (
           <button

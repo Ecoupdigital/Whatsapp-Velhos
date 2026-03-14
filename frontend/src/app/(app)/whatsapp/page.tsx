@@ -260,7 +260,7 @@ export default function WhatsAppPage() {
   /* ── render ──────────────────────────────────────────────── */
   return (
     <motion.div
-      className="space-y-6 animate-fade-in"
+      className="space-y-6 animate-fade-in overflow-x-hidden"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
@@ -275,18 +275,19 @@ export default function WhatsAppPage() {
             Status de conexao e historico de mensagens
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           <Button
             variant="secondary"
             icon={<RefreshCw className={refreshing ? "animate-spin" : ""} />}
             onClick={() => fetchData(true)}
             loading={refreshing}
             size="sm"
+            className="w-full sm:w-auto justify-center"
           >
             Atualizar
           </Button>
-          <Button icon={<Send />} onClick={() => setSendModalOpen(true)}>
-            Enviar Mensagem Manual
+          <Button icon={<Send />} onClick={() => setSendModalOpen(true)} className="w-full sm:w-auto justify-center">
+            Enviar Mensagem
           </Button>
         </div>
       </div>
@@ -366,39 +367,43 @@ export default function WhatsAppPage() {
 
       {/* Filters */}
       <Card padding="sm">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
           <div className="flex items-center gap-1.5 text-txt-tertiary mr-1">
             <Filter className="h-4 w-4" />
             <span className="text-xs font-body uppercase tracking-wider">
               Filtros
             </span>
           </div>
-          <Select
-            options={TIPO_FILTER_OPTIONS}
-            value={filterTipo}
-            onChange={(e) => setFilterTipo(e.target.value)}
-            containerClassName="min-w-[160px]"
-          />
-          <Select
-            options={STATUS_FILTER_OPTIONS}
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            containerClassName="min-w-[140px]"
-          />
-          <Input
-            type="date"
-            value={filterDateStart}
-            onChange={(e) => setFilterDateStart(e.target.value)}
-            containerClassName="min-w-[140px]"
-            placeholder="Data inicio"
-          />
-          <Input
-            type="date"
-            value={filterDateEnd}
-            onChange={(e) => setFilterDateEnd(e.target.value)}
-            containerClassName="min-w-[140px]"
-            placeholder="Data fim"
-          />
+          <div className="grid grid-cols-2 sm:flex gap-3 w-full sm:w-auto">
+            <Select
+              options={TIPO_FILTER_OPTIONS}
+              value={filterTipo}
+              onChange={(e) => setFilterTipo(e.target.value)}
+              containerClassName="w-full sm:min-w-[160px]"
+            />
+            <Select
+              options={STATUS_FILTER_OPTIONS}
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              containerClassName="w-full sm:min-w-[140px]"
+            />
+          </div>
+          <div className="grid grid-cols-2 sm:flex gap-3 w-full sm:w-auto">
+            <Input
+              type="date"
+              value={filterDateStart}
+              onChange={(e) => setFilterDateStart(e.target.value)}
+              containerClassName="w-full sm:min-w-[140px]"
+              placeholder="Data inicio"
+            />
+            <Input
+              type="date"
+              value={filterDateEnd}
+              onChange={(e) => setFilterDateEnd(e.target.value)}
+              containerClassName="w-full sm:min-w-[140px]"
+              placeholder="Data fim"
+            />
+          </div>
           {(filterTipo || filterStatus || filterDateStart || filterDateEnd) && (
             <Button
               variant="secondary"
@@ -409,6 +414,7 @@ export default function WhatsAppPage() {
                 setFilterDateStart("");
                 setFilterDateEnd("");
               }}
+              className="w-full sm:w-auto justify-center"
             >
               Limpar
             </Button>
@@ -416,8 +422,8 @@ export default function WhatsAppPage() {
         </div>
       </Card>
 
-      {/* Log table */}
-      <Card padding="none" className="overflow-hidden">
+      {/* Desktop Log table */}
+      <Card padding="none" className="overflow-hidden hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -487,6 +493,58 @@ export default function WhatsAppPage() {
           </table>
         </div>
       </Card>
+
+      {/* Mobile Log cards */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} padding="md">
+              <Skeleton className="h-4 w-32 mb-3" />
+              <Skeleton className="h-3 w-full mb-2" />
+              <Skeleton className="h-3 w-3/4" />
+            </Card>
+          ))
+        ) : filteredLogs.length === 0 ? (
+          <Card padding="md">
+            <EmptyState
+              icon={<MessageSquare />}
+              title="Nenhuma mensagem encontrada"
+              description="Ajuste os filtros ou envie uma nova mensagem"
+            />
+          </Card>
+        ) : (
+          filteredLogs.map((l) => (
+            <Card
+              key={l.id}
+              padding="md"
+              className="space-y-2 cursor-pointer hover:bg-surface-card-hover transition-colors"
+              onClick={() => setViewMsg(l)}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-txt-secondary font-body">
+                  {formatDateTime(l.enviado_em)}
+                </span>
+                <StatusMsgBadge status={l.status} />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-mono text-txt-primary truncate">
+                  {l.telefone ?? "-"}
+                </span>
+                <TipoMsgBadge tipo={l.tipo_mensagem} />
+              </div>
+              <div className="flex items-center justify-end pt-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setViewMsg(l); }}
+                  className="text-xs text-brand-red hover:text-brand-red-hover font-body flex items-center gap-1 transition-colors"
+                >
+                  <Eye className="h-3 w-3" />
+                  Ver conteudo
+                </button>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
 
       {/* ── View content modal ─────────────────────────────── */}
       <Modal open={!!viewMsg} onClose={() => setViewMsg(null)} size="md">
