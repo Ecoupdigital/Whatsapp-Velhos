@@ -80,6 +80,7 @@ class MensalidadeCreate(BaseModel):
     status: str = "pendente"
 
 class MensalidadeUpdate(BaseModel):
+    valor: Optional[float] = None
     valor_pago: Optional[float] = None
     status: Optional[str] = None
     data_pagamento: Optional[str] = None

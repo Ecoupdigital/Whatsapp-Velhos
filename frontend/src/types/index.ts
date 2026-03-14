@@ -75,6 +75,7 @@ export interface MensalidadeCreate {
 }
 
 export interface MensalidadeUpdate {
+  valor?: number | null;
   valor_pago?: number | null;
   status?: string | null;
   data_pagamento?: string | null;

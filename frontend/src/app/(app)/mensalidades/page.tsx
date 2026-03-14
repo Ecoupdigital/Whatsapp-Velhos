@@ -352,6 +352,7 @@ export default function MensalidadesPage() {
     setEditSaving(true);
     try {
       const update: MensalidadeUpdate = {
+        valor: parseFloat(editForm.valor) || 0,
         status: editForm.status,
         valor_pago: parseFloat(editForm.valor_pago) || 0,
         forma_pagto: editForm.forma_pagto || null,
@@ -788,6 +789,19 @@ export default function MensalidadesPage() {
               <option value="atrasado">Atrasado</option>
               <option value="isento">Isento</option>
             </select>
+          </div>
+
+          {/* Valor cobrado */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Valor Cobrado (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={editForm.valor}
+              onChange={(e) => setEditForm((p) => ({ ...p, valor: e.target.value }))}
+              className="h-10 rounded-lg px-3 text-sm font-mono bg-surface-tertiary border border-border text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+            />
+            <p className="text-xs text-txt-tertiary">Jogador: R$60 | Socio: R$20</p>
           </div>
 
           {/* Valor pago */}
