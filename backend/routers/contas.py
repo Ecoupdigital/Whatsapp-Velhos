@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
 from models import Conta, Transacao
 from schemas import ContaCreate, ContaUpdate, ContaOut
 from auth import get_current_user
+from datetime import datetime
 
 router = APIRouter(prefix="/api/contas", tags=["contas"], dependencies=[Depends(get_current_user)])
 
@@ -68,3 +70,50 @@ def excluir_conta(conta_id: int, db: Session = Depends(get_db)):
     conta.ativo = 0
     db.commit()
     return {"ok": True}
+
+
+class TransferenciaRequest(BaseModel):
+    conta_origem_id: int
+    conta_destino_id: int
+    valor: float
+    descricao: str = ""
+
+
+@router.post("/transferencia")
+def transferir(req: TransferenciaRequest, db: Session = Depends(get_db)):
+    if req.valor <= 0:
+        raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
+    if req.conta_origem_id == req.conta_destino_id:
+        raise HTTPException(status_code=400, detail="Contas devem ser diferentes")
+
+    origem = db.query(Conta).filter(Conta.id == req.conta_origem_id).first()
+    destino = db.query(Conta).filter(Conta.id == req.conta_destino_id).first()
+    if not origem or not destino:
+        raise HTTPException(status_code=404, detail="Conta nao encontrada")
+
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    desc = req.descricao or f"Transferencia {origem.nome} -> {destino.nome}"
+
+    # Saida da conta origem
+    saida = Transacao(
+        tipo="saida",
+        categoria="transferencia",
+        descricao=desc,
+        valor=req.valor,
+        data=hoje,
+        conta_id=req.conta_origem_id,
+    )
+    # Entrada na conta destino
+    entrada = Transacao(
+        tipo="entrada",
+        categoria="transferencia",
+        descricao=desc,
+        valor=req.valor,
+        data=hoje,
+        conta_id=req.conta_destino_id,
+    )
+    db.add(saida)
+    db.add(entrada)
+    db.commit()
+
+    return {"ok": True, "descricao": desc, "valor": req.valor}

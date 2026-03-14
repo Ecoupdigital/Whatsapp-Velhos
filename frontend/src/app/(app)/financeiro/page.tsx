@@ -45,6 +45,7 @@ const CATEGORIAS = [
   { value: "material", label: "Material" },
   { value: "arbitragem", label: "Arbitragem" },
   { value: "viagem", label: "Viagem" },
+  { value: "transferencia", label: "Transferencia" },
   { value: "outros", label: "Outros" },
 ] as const;
 
@@ -55,6 +56,7 @@ const CATEGORIA_COLORS: Record<string, string> = {
   material: "bg-yellow-500/15 text-yellow-400 border-yellow-500/25",
   arbitragem: "bg-gray-500/15 text-gray-400 border-gray-500/25",
   viagem: "bg-green-500/15 text-green-400 border-green-500/25",
+  transferencia: "bg-cyan-500/15 text-cyan-400 border-cyan-500/25",
   cartao_baile: "bg-pink-500/15 text-pink-400 border-pink-500/25",
   patrocinio: "bg-teal-500/15 text-teal-400 border-teal-500/25",
   outros: "bg-gray-500/15 text-gray-400 border-gray-500/25",
@@ -122,6 +124,11 @@ export default function FinanceiroPage() {
   });
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+
+  // Transfer modal
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferData, setTransferData] = useState({ conta_origem_id: "", conta_destino_id: "", valor: "", descricao: "" });
+  const [transferring, setTransferring] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Fetchers
@@ -268,6 +275,42 @@ export default function FinanceiroPage() {
   }
 
   // ---------------------------------------------------------------------------
+  // Transfer
+  // ---------------------------------------------------------------------------
+
+  async function handleTransfer() {
+    if (!transferData.conta_origem_id || !transferData.conta_destino_id) {
+      toast.error("Selecione as contas"); return;
+    }
+    if (transferData.conta_origem_id === transferData.conta_destino_id) {
+      toast.error("Contas devem ser diferentes"); return;
+    }
+    const valor = parseFloat(transferData.valor);
+    if (!valor || valor <= 0) {
+      toast.error("Valor deve ser maior que zero"); return;
+    }
+    setTransferring(true);
+    try {
+      await api.post("/contas/transferencia", {
+        conta_origem_id: parseInt(transferData.conta_origem_id),
+        conta_destino_id: parseInt(transferData.conta_destino_id),
+        valor,
+        descricao: transferData.descricao,
+      });
+      toast.success("Transferencia realizada!");
+      setTransferOpen(false);
+      setTransferData({ conta_origem_id: "", conta_destino_id: "", valor: "", descricao: "" });
+      fetchBalanco();
+      fetchTransacoes();
+      fetchContas();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro na transferencia");
+    } finally {
+      setTransferring(false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
@@ -315,6 +358,15 @@ export default function FinanceiroPage() {
           <Plus size={18} />
           Nova Transacao
         </button>
+        {activeContas.length >= 2 && (
+          <button
+            onClick={() => setTransferOpen(true)}
+            className="flex items-center justify-center gap-2 bg-surface-card border border-border hover:border-brand-red text-txt-primary font-body font-semibold px-5 py-2.5 rounded-lg transition-colors w-full sm:w-auto"
+          >
+            <Wallet size={18} />
+            Transferir
+          </button>
+        )}
       </div>
 
       {/* ------------------------------------------------------------------ */}
@@ -880,6 +932,77 @@ export default function FinanceiroPage() {
               {editingTransaction ? "Salvar" : "Criar"}
             </button>
           </div>
+        </ModalFooter>
+      </Modal>
+
+      {/* Transfer Modal */}
+      <Modal open={transferOpen} onClose={() => setTransferOpen(false)} size="md">
+        <ModalHeader>Transferencia entre Contas</ModalHeader>
+        <ModalBody className="space-y-4">
+          <div>
+            <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">Conta Origem</label>
+            <select
+              value={transferData.conta_origem_id}
+              onChange={(e) => setTransferData(p => ({ ...p, conta_origem_id: e.target.value }))}
+              className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red"
+            >
+              <option value="">Selecionar...</option>
+              {activeContas.map(c => (
+                <option key={c.id} value={c.id}>{c.nome} ({formatCurrency(c.saldo_atual)})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">Conta Destino</label>
+            <select
+              value={transferData.conta_destino_id}
+              onChange={(e) => setTransferData(p => ({ ...p, conta_destino_id: e.target.value }))}
+              className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red"
+            >
+              <option value="">Selecionar...</option>
+              {activeContas.filter(c => String(c.id) !== transferData.conta_origem_id).map(c => (
+                <option key={c.id} value={c.id}>{c.nome} ({formatCurrency(c.saldo_atual)})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">Valor (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={transferData.valor}
+              onChange={(e) => setTransferData(p => ({ ...p, valor: e.target.value }))}
+              placeholder="0,00"
+              className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-lg font-mono font-bold text-txt-primary focus:outline-none focus:border-brand-red"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-body uppercase tracking-wider text-txt-tertiary mb-2">Descricao (opcional)</label>
+            <input
+              type="text"
+              value={transferData.descricao}
+              onChange={(e) => setTransferData(p => ({ ...p, descricao: e.target.value }))}
+              placeholder="Ex: Deposito no banco"
+              className="w-full bg-surface-tertiary border border-border rounded-lg px-4 py-2.5 text-sm font-body text-txt-primary focus:outline-none focus:border-brand-red"
+            />
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <button
+            onClick={() => setTransferOpen(false)}
+            className="px-4 py-2 text-sm font-body text-txt-secondary hover:text-txt-primary transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleTransfer}
+            disabled={transferring}
+            className="flex items-center gap-2 bg-brand-red hover:bg-brand-red-hover disabled:opacity-50 text-white font-body font-semibold px-5 py-2 rounded-lg shadow-brand transition-colors"
+          >
+            {transferring && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            Transferir
+          </button>
         </ModalFooter>
       </Modal>
     </div>
