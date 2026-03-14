@@ -17,6 +17,9 @@ import {
   AlertTriangle,
   Users,
   X,
+  CheckSquare,
+  Square,
+  UserPlus,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, formatCurrency, formatDate, formatMonth } from "@/lib/utils";
@@ -236,6 +239,15 @@ export default function MensalidadesPage() {
   const [editForm, setEditForm] = useState({ valor: "", valor_pago: "", status: "", forma_pagto: "", data_pagamento: "", observacoes: "" });
   const [editSaving, setEditSaving] = useState(false);
 
+  // Selection
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  // New mensalidade modal
+  const [newModalOpen, setNewModalOpen] = useState(false);
+  const [newForm, setNewForm] = useState({ jogador_id: "", valor: "60" });
+  const [newSaving, setNewSaving] = useState(false);
+  const [jogadores, setJogadores] = useState<Array<{ id: number; nome: string; apelido: string | null; tipo: string }>>([]);
+
   // ---- Fetch data ----
 
   const fetchMensalidades = useCallback(async () => {
@@ -287,18 +299,7 @@ export default function MensalidadesPage() {
     }
   }
 
-  async function handleEnviarCobrancas() {
-    setEnviando(true);
-    try {
-      await api.post<unknown>("/mensalidades/cobrar", { mes_referencia: mes });
-      toast.success("Cobrancas enviadas via WhatsApp!");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erro ao enviar cobrancas";
-      toast.error(message);
-    } finally {
-      setEnviando(false);
-    }
-  }
+  // handleEnviarCobrancas replaced by handleEnviarCobrancasSeletivo below
 
   async function handleQuickPay(id: number, data: MensalidadeUpdate) {
     try {
@@ -371,8 +372,7 @@ export default function MensalidadesPage() {
     }
   }
 
-  // ---- Filtering ----
-
+  // ---- Filtering (before selection handlers that depend on it) ----
   const filtered = mensalidades.filter((m) => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -380,6 +380,72 @@ export default function MensalidadesPage() {
     const apelido = m.jogador?.apelido?.toLowerCase() ?? "";
     return nome.includes(q) || apelido.includes(q);
   });
+
+  // ---- Fetch jogadores for new modal ----
+  useEffect(() => {
+    api.get<Array<{ id: number; nome: string; apelido: string | null; tipo: string }>>("/jogadores?ativo=1")
+      .then(setJogadores).catch(() => {});
+  }, []);
+
+  // ---- Selection ----
+  function toggleSelect(id: number) {
+    setSelected(prev => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  }
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) setSelected(new Set());
+    else setSelected(new Set(filtered.map(m => m.id)));
+  }
+
+  // ---- New mensalidade ----
+  async function handleNewMensalidade() {
+    if (!newForm.jogador_id) { toast.error("Selecione um jogador"); return; }
+    setNewSaving(true);
+    try {
+      await api.post("/mensalidades", {
+        jogador_id: parseInt(newForm.jogador_id),
+        mes_referencia: mes,
+        valor: parseFloat(newForm.valor) || 60,
+        status: "pendente",
+      });
+      toast.success("Mensalidade adicionada");
+      setNewModalOpen(false);
+      setNewForm({ jogador_id: "", valor: "60" });
+      fetchMensalidades();
+      fetchResumo();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao criar mensalidade");
+    } finally {
+      setNewSaving(false);
+    }
+  }
+
+  // ---- Enviar cobrancas ----
+  async function handleEnviarCobrancasSeletivo() {
+    setEnviando(true);
+    try {
+      const ids = selected.size > 0 ? Array.from(selected) : null;
+      const body: Record<string, unknown> = { mes_referencia: mes };
+      if (ids) body.mensalidade_ids = ids;
+      const result = await api.post<{ enviados: number; erros: number; total: number }>("/mensalidades/cobrar", body);
+      if (result.enviados > 0) {
+        toast.success(`${result.enviados} cobranca(s) enviada(s)!`);
+      } else {
+        toast(`Nenhuma cobranca enviada (${result.total} processados)`, { icon: "⚠️" });
+      }
+      if (result.erros > 0) {
+        toast.error(`${result.erros} erro(s) no envio`);
+      }
+      setSelected(new Set());
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar cobrancas");
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   // ---- Stats cards config ----
 
@@ -539,7 +605,15 @@ export default function MensalidadesPage() {
         </button>
 
         <button
-          onClick={handleEnviarCobrancas}
+          onClick={() => setNewModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-display text-sm uppercase tracking-wider transition-all border border-border bg-surface-card text-txt-primary hover:border-brand-red hover:text-brand-red"
+        >
+          <UserPlus size={16} />
+          Nova Mensalidade
+        </button>
+
+        <button
+          onClick={handleEnviarCobrancasSeletivo}
           disabled={enviando}
           className={cn(
             "flex items-center gap-2 px-4 py-2.5 rounded-lg font-display text-sm uppercase tracking-wider transition-all border",
@@ -553,7 +627,7 @@ export default function MensalidadesPage() {
           ) : (
             <Send size={16} />
           )}
-          Enviar Cobrancas
+          {selected.size > 0 ? `Cobrar (${selected.size})` : "Cobrar Todos"}
         </button>
 
         <div className="flex-1" />
@@ -576,6 +650,11 @@ export default function MensalidadesPage() {
           <table className="w-full text-sm font-body">
             <thead>
               <tr className="border-b border-border bg-surface-secondary">
+                <th className="px-3 py-3 w-10">
+                  <button onClick={toggleSelectAll} className="text-txt-tertiary hover:text-txt-primary">
+                    {selected.size === filtered.length && filtered.length > 0 ? <CheckSquare size={16} className="text-brand-red" /> : <Square size={16} />}
+                  </button>
+                </th>
                 <th className="text-left px-4 py-3 text-xs font-display uppercase tracking-wider text-txt-secondary">
                   Jogador
                 </th>
@@ -601,7 +680,7 @@ export default function MensalidadesPage() {
                 Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-16 text-center">
+                  <td colSpan={7} className="px-4 py-16 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <div className="p-4 rounded-full bg-surface-tertiary">
                         <CreditCard size={32} className="text-txt-tertiary" />
@@ -649,6 +728,13 @@ export default function MensalidadesPage() {
                           : undefined
                       }
                     >
+                      {/* Checkbox */}
+                      <td className="px-3 py-3 w-10">
+                        <button onClick={() => toggleSelect(m.id)} className="text-txt-tertiary hover:text-txt-primary">
+                          {selected.has(m.id) ? <CheckSquare size={16} className="text-brand-red" /> : <Square size={16} />}
+                        </button>
+                      </td>
+
                       {/* Jogador */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -769,6 +855,49 @@ export default function MensalidadesPage() {
           </table>
         </div>
       </div>
+
+      {/* ===== New Mensalidade Modal ===== */}
+      <Modal open={newModalOpen} onClose={() => setNewModalOpen(false)} size="md">
+        <ModalHeader>Nova Mensalidade - {formatMonth(mes)}</ModalHeader>
+        <ModalBody className="space-y-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Jogador</label>
+            <select
+              value={newForm.jogador_id}
+              onChange={(e) => {
+                const jid = e.target.value;
+                setNewForm(p => {
+                  const jog = jogadores.find(j => String(j.id) === jid);
+                  const val = jog?.tipo === "socio" ? "20" : "60";
+                  return { ...p, jogador_id: jid, valor: val };
+                });
+              }}
+              className="h-10 rounded-lg px-3 text-sm font-body bg-surface-tertiary border border-border text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+            >
+              <option value="">Selecionar jogador...</option>
+              {jogadores.map(j => (
+                <option key={j.id} value={j.id}>
+                  {j.apelido || j.nome} ({j.tipo})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-txt-secondary font-body">Valor (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={newForm.valor}
+              onChange={(e) => setNewForm(p => ({ ...p, valor: e.target.value }))}
+              className="h-10 rounded-lg px-3 text-sm font-mono bg-surface-tertiary border border-border text-txt-primary focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+            />
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setNewModalOpen(false)}>Cancelar</Button>
+          <Button loading={newSaving} onClick={handleNewMensalidade}>Criar Mensalidade</Button>
+        </ModalFooter>
+      </Modal>
 
       {/* ===== Edit Mensalidade Modal ===== */}
       <Modal open={!!editingMens} onClose={() => setEditingMens(null)} size="md">
