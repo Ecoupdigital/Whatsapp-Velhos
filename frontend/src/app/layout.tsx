@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Oswald, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/lib/auth";
+import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
 
 const oswald = Oswald({
@@ -27,7 +28,16 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Velhos Parceiros F.C.",
-  description: "Painel de gestao - Velhos Parceiros F.C.",
+  description: "Sistema de Gestao - Velhos Parceiros Futebol Clube",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Velhos FC",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
@@ -46,8 +56,13 @@ export default function RootLayout({
       lang="pt-BR"
       className={`dark ${oswald.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}
     >
+      <head>
+        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+        <meta name="theme-color" content="#0A0A0B" />
+      </head>
       <body className="bg-surface-primary text-txt-primary font-body antialiased">
         <AuthProvider>
+          <PWARegister />
           {children}
           <Toaster
             position="top-right"
