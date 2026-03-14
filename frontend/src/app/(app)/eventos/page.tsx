@@ -295,11 +295,11 @@ export default function EventosPage() {
                       hoverable
                       className="group cursor-pointer transition-all duration-300 hover:-translate-y-[2px] hover:shadow-lg hover:shadow-black/30"
                     >
-                      <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
                         {/* Type Badge */}
                         <span
                           className={cn(
-                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium shrink-0",
+                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
                             tipoStyle.bg,
                             tipoStyle.text
                           )}
@@ -308,24 +308,25 @@ export default function EventosPage() {
                           {evento.tipo.charAt(0).toUpperCase() + evento.tipo.slice(1)}
                         </span>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          {/* Status Badge */}
+                        {/* Status Badge */}
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium",
+                            statusStyle.bg,
+                            statusStyle.text
+                          )}
+                        >
                           <span
-                            className={cn(
-                              "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap",
-                              statusStyle.bg,
-                              statusStyle.text
-                            )}
-                          >
-                            <span
-                              className={cn("h-1.5 w-1.5 rounded-full", statusStyle.dot)}
-                              aria-hidden="true"
-                            />
-                            {statusLabels[evento.status] || evento.status}
-                          </span>
+                            className={cn("h-1.5 w-1.5 rounded-full", statusStyle.dot)}
+                            aria-hidden="true"
+                          />
+                          {statusLabels[evento.status] || evento.status}
+                        </span>
 
-                          {/* Edit / Delete buttons */}
-                          <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="flex-1" />
+
+                        {/* Edit / Delete buttons */}
+                        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
                             <button
                               onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(evento); }}
                               className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary"
@@ -346,11 +347,10 @@ export default function EventosPage() {
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
-                        </div>
                       </div>
 
                       {/* Title */}
-                      <h3 className="text-lg font-display font-semibold text-txt-primary mb-2 group-hover:text-brand-red transition-colors">
+                      <h3 className="text-base sm:text-lg font-display font-semibold text-txt-primary mb-2 group-hover:text-brand-red transition-colors truncate">
                         {evento.titulo}
                       </h3>
 

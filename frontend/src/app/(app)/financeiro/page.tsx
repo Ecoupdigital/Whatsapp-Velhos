@@ -321,7 +321,7 @@ export default function FinanceiroPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-surface-card border border-border-subtle p-6 shadow-card relative overflow-hidden"
+            className="bg-surface-card border border-border-subtle p-4 sm:p-6 shadow-card relative overflow-hidden"
             style={{ clipPath: DIAGONAL_CLIP }}
           >
             <div className="flex items-start justify-between">
@@ -329,7 +329,7 @@ export default function FinanceiroPage() {
                 <p className="text-txt-secondary text-sm font-body uppercase tracking-wider">
                   {card.label}
                 </p>
-                <p className={cn("font-mono text-2xl lg:text-3xl mt-2 font-bold", card.color)}>
+                <p className={cn("font-mono text-xl sm:text-2xl lg:text-3xl mt-2 font-bold break-all", card.color)}>
                   {formatCurrency(card.value)}
                 </p>
                 {card.variacao !== undefined && card.variacao !== null && (
@@ -357,9 +357,9 @@ export default function FinanceiroPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.4 }}
-        className="bg-surface-card border border-border-subtle rounded-lg p-6 shadow-card"
+        className="bg-surface-card border border-border-subtle rounded-lg p-3 sm:p-6 shadow-card"
       >
-        <h2 className="font-display text-xl uppercase tracking-wide text-txt-primary mb-6">
+        <h2 className="font-display text-base sm:text-xl uppercase tracking-wide text-txt-primary mb-4 sm:mb-6">
           Fluxo Mensal
         </h2>
         {chartData.length > 0 ? (
@@ -555,7 +555,7 @@ export default function FinanceiroPage() {
         className="md:hidden space-y-3"
       >
         {transacoes.length === 0 ? (
-          <div className="bg-surface-card border border-border-subtle rounded-lg p-8 text-center">
+          <div className="bg-surface-card border border-border-subtle rounded-lg p-4 sm:p-8 text-center">
             <p className="text-txt-tertiary font-body">Nenhuma transacao encontrada</p>
           </div>
         ) : (
