@@ -60,11 +60,14 @@ def atualizar(jogador_id: int, data: JogadorUpdate, db: Session = Depends(get_db
 
 
 @router.delete("/{jogador_id}")
-def desativar(jogador_id: int, db: Session = Depends(get_db)):
+def excluir(jogador_id: int, force: bool = Query(False), db: Session = Depends(get_db)):
     jogador = db.query(Jogador).filter(Jogador.id == jogador_id).first()
     if not jogador:
         raise HTTPException(status_code=404, detail="Jogador nao encontrado")
-    jogador.ativo = 0
-    jogador.updated_at = datetime.now().isoformat()
+    if force:
+        db.delete(jogador)
+    else:
+        jogador.ativo = 0
+        jogador.updated_at = datetime.now().isoformat()
     db.commit()
     return {"ok": True}

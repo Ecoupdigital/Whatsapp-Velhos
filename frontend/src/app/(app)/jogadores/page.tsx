@@ -247,12 +247,12 @@ export default function JogadoresPage() {
     }
   }
 
-  /* ─── delete handler ─ */
+  /* ─── delete handler (exclui de verdade) ─ */
   async function handleDelete(id: number) {
     if (deletingId === id) {
       try {
-        await api.delete(`/jogadores/${id}`);
-        toast.success("Jogador excluido");
+        await api.delete(`/jogadores/${id}?force=true`);
+        toast.success("Jogador excluido permanentemente");
         setDeletingId(null);
         setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
         fetchJogadores();
@@ -262,6 +262,17 @@ export default function JogadoresPage() {
     } else {
       setDeletingId(id);
       setTimeout(() => setDeletingId(null), 3000);
+    }
+  }
+
+  /* ─── deactivate handler ─ */
+  async function handleDeactivate(id: number) {
+    try {
+      await api.delete(`/jogadores/${id}`);
+      toast.success("Jogador desativado");
+      fetchJogadores();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao desativar");
     }
   }
 
@@ -322,7 +333,7 @@ export default function JogadoresPage() {
     try {
       const ids = Array.from(selected);
       for (let i = 0; i < ids.length; i++) {
-        await api.delete(`/jogadores/${ids[i]}`);
+        await api.delete(`/jogadores/${ids[i]}?force=true`);
       }
       toast.success(`${count} jogador(es) excluido(s)`);
       setSelected(new Set());
@@ -428,6 +439,13 @@ export default function JogadoresPage() {
             <div className="flex items-center gap-2">
               <Button size="sm" variant="secondary" onClick={() => { setBulkField("tipo"); setBulkValue("jogador"); setBulkModalOpen(true); }}>
                 Editar em Massa
+              </Button>
+              <Button size="sm" variant="secondary" onClick={async () => {
+                const ids = Array.from(selected);
+                for (let i = 0; i < ids.length; i++) { await handleDeactivate(ids[i]); }
+                setSelected(new Set());
+              }}>
+                Desativar ({selected.size})
               </Button>
               <Button size="sm" variant="danger" onClick={handleBulkDelete} icon={<Trash2 />}>
                 Excluir ({selected.size})
