@@ -61,10 +61,15 @@ def atualizar(jogador_id: int, data: JogadorUpdate, db: Session = Depends(get_db
 
 @router.delete("/{jogador_id}")
 def excluir(jogador_id: int, force: bool = Query(False), db: Session = Depends(get_db)):
+    from models import Mensalidade, CartaoBaile, EventoParticipante, MensagemLog
     jogador = db.query(Jogador).filter(Jogador.id == jogador_id).first()
     if not jogador:
         raise HTTPException(status_code=404, detail="Jogador nao encontrado")
     if force:
+        db.query(Mensalidade).filter(Mensalidade.jogador_id == jogador_id).delete()
+        db.query(CartaoBaile).filter(CartaoBaile.jogador_id == jogador_id).delete()
+        db.query(EventoParticipante).filter(EventoParticipante.jogador_id == jogador_id).delete()
+        db.query(MensagemLog).filter(MensagemLog.jogador_id == jogador_id).delete()
         db.delete(jogador)
     else:
         jogador.ativo = 0
