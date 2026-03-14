@@ -1,14 +1,18 @@
+import asyncio
+import random
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from database import get_db
-from models import Mensalidade, Jogador, Transacao, MensagemLog
+from models import Mensalidade, Jogador, Transacao, MensagemLog, Configuracao
 from schemas import (
     MensalidadeCreate, MensalidadeUpdate, MensalidadeOut,
     GerarMensalidadesRequest, MensalidadeResumo,
 )
 from auth import get_current_user
 from services.whatsapp_service import send_text_message
+from services.template_service import render_template, mes_por_extenso
 from datetime import datetime
 from typing import Optional
 
@@ -163,6 +167,28 @@ async def cobrar(req: CobrarRequest, db: Session = Depends(get_db)):
             .all()
         )
 
+    # Carregar configs do banco
+    def _cfg(chave: str, default: str = "") -> str:
+        row = db.query(Configuracao).filter(Configuracao.chave == chave).first()
+        return row.valor if row else default
+
+    template_text = _cfg(
+        "template_cobranca_manual",
+        (
+            "Fala, {nome}! Tudo bem?\n\n"
+            "Passando pra lembrar da mensalidade do time:\n\n"
+            "Valor: *R$ {valor}*\nReferencia: *{mes}*\nVencimento: *dia {vencimento}*\n\n"
+            "Apos o dia {vencimento}, o valor do jogador passa para *R$ {valor_multa}*.\n\n"
+            "PIX: *{pix}*\n\n"
+            "Se ja pagou, pode desconsiderar essa mensagem!\n\n"
+            "_Mensagem enviada pelo sistema {time}_"
+        ),
+    )
+    pix_chave = _cfg("pix_chave", "pix@velhosparceiros.com.br")
+    time_nome = _cfg("time_nome", "Velhos Parceiros F.C.")
+    dia_vencimento = _cfg("dia_vencimento", "15")
+    valor_multa = _cfg("valor_multa", "65")
+
     enviados = 0
     erros = 0
     detalhes = []
@@ -173,17 +199,19 @@ async def cobrar(req: CobrarRequest, db: Session = Depends(get_db)):
             continue
 
         nome = jogador.apelido or jogador.nome
-        texto = (
-            f"Fala, {nome}! Tudo bem? ⚽\n\n"
-            f"Passando pra lembrar da mensalidade do time:\n\n"
-            f"💰 *Valor*: R$ {m.valor:.2f}\n"
-            f"📅 *Referencia*: {m.mes_referencia}\n"
-            f"📅 Vencimento: *dia 15* deste mes.\n\n"
-            f"⚠️ Apos o dia 15, o valor do jogador passa para *R$ 65,00*.\n\n"
-            f"💳 *PIX*: pix@velhosparceiros.com.br\n\n"
-            f"Se ja pagou, pode desconsiderar essa mensagem!\n\n"
-            f"_Mensagem enviada pelo sistema Velhos Parceiros F.C._"
-        )
+        valor_formatado = f"{m.valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        context = {
+            "nome": nome,
+            "nome_completo": jogador.nome,
+            "valor": valor_formatado,
+            "valor_multa": valor_multa,
+            "mes": mes_por_extenso(m.mes_referencia),
+            "vencimento": dia_vencimento,
+            "pix": pix_chave,
+            "time": time_nome,
+        }
+        texto = render_template(template_text, context)
 
         result = await send_text_message(jogador.telefone, texto)
 
@@ -210,6 +238,9 @@ async def cobrar(req: CobrarRequest, db: Session = Depends(get_db)):
             "success": result["success"],
             "error": result.get("error", ""),
         })
+
+        # Delay entre mensagens
+        await asyncio.sleep(random.uniform(3, 10))
 
     db.commit()
     return {"enviados": enviados, "erros": erros, "total": len(detalhes), "detalhes": detalhes}

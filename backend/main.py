@@ -1,10 +1,16 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, SessionLocal
 from models import Usuario
 from auth import hash_password
 
-from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard
+from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes
+from routers.configuracoes import seed_defaults as seed_default_configs
+from services.scheduler import start_scheduler, stop_scheduler
+
+log = logging.getLogger(__name__)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -34,12 +40,14 @@ app.include_router(cartoes.router)
 app.include_router(promocoes.router)
 app.include_router(whatsapp.router)
 app.include_router(dashboard.router)
+app.include_router(configuracoes.router)
 
 
 @app.on_event("startup")
-def seed_admin():
+def on_startup():
     db = SessionLocal()
     try:
+        # Seed admin user
         admin = db.query(Usuario).filter(Usuario.username == "admin").first()
         if not admin:
             admin = Usuario(
@@ -50,8 +58,24 @@ def seed_admin():
             )
             db.add(admin)
             db.commit()
+
+        # Seed default configs
+        inserted = seed_default_configs(db)
+        if inserted:
+            log.info(f"Seed: {inserted} configuracoes padrao inseridas.")
     finally:
         db.close()
+
+    # Start scheduler
+    try:
+        start_scheduler(app)
+    except Exception:
+        log.exception("Erro ao iniciar scheduler")
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    stop_scheduler()
 
 
 @app.get("/")
