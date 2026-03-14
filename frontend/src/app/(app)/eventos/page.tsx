@@ -293,7 +293,7 @@ export default function EventosPage() {
                   <Link href={`/eventos/${evento.id}`}>
                     <Card
                       hoverable
-                      className="group cursor-pointer transition-all duration-300 hover:-translate-y-[2px] hover:shadow-lg hover:shadow-black/30 relative"
+                      className="group cursor-pointer transition-all duration-300 hover:-translate-y-[2px] hover:shadow-lg hover:shadow-black/30"
                     >
                       <div className="flex items-start justify-between mb-3">
                         {/* Type Badge */}
@@ -308,20 +308,45 @@ export default function EventosPage() {
                           {evento.tipo.charAt(0).toUpperCase() + evento.tipo.slice(1)}
                         </span>
 
-                        {/* Status Badge */}
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium",
-                            statusStyle.bg,
-                            statusStyle.text
-                          )}
-                        >
+                        <div className="flex items-center gap-2">
+                          {/* Status Badge */}
                           <span
-                            className={cn("h-1.5 w-1.5 rounded-full", statusStyle.dot)}
-                            aria-hidden="true"
-                          />
-                          {statusLabels[evento.status] || evento.status}
-                        </span>
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium",
+                              statusStyle.bg,
+                              statusStyle.text
+                            )}
+                          >
+                            <span
+                              className={cn("h-1.5 w-1.5 rounded-full", statusStyle.dot)}
+                              aria-hidden="true"
+                            />
+                            {statusLabels[evento.status] || evento.status}
+                          </span>
+
+                          {/* Edit / Delete buttons */}
+                          <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(evento); }}
+                              className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary"
+                              title="Editar evento"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(evento.id); }}
+                              className={cn(
+                                "h-7 w-7 rounded-lg flex items-center justify-center transition-colors",
+                                deletingId === evento.id
+                                  ? "bg-red-500/20 text-red-400"
+                                  : "text-txt-tertiary hover:text-red-400 hover:bg-red-500/10"
+                              )}
+                              title={deletingId === evento.id ? "Clique de novo para confirmar" : "Excluir evento"}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Title */}
@@ -359,36 +384,6 @@ export default function EventosPage() {
                         </div>
                       </div>
 
-                      {/* Edit / Delete buttons */}
-                      <div className="absolute bottom-3 right-3 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openEdit(evento);
-                          }}
-                          className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary"
-                          title="Editar evento"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDelete(evento.id);
-                          }}
-                          className={cn(
-                            "h-7 w-7 rounded-lg flex items-center justify-center transition-colors",
-                            deletingId === evento.id
-                              ? "bg-red-500/20 text-red-400"
-                              : "text-txt-tertiary hover:text-red-400 hover:bg-red-500/10"
-                          )}
-                          title={deletingId === evento.id ? "Clique de novo para confirmar" : "Excluir evento"}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
                     </Card>
                   </Link>
                 </motion.div>
