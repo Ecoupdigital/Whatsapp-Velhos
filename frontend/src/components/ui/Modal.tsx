@@ -102,8 +102,11 @@ function Modal({
             transition={{ duration: 0.2 }}
             onClick={handleBackdropClick}
           >
-            {/* Mobile: near-fullscreen (inset-2), Desktop: centered with max-w */}
-            <div className="flex min-h-full items-center justify-center p-2 md:p-4">
+            {/* Mobile: near-fullscreen with safe-area, Desktop: centered with max-w */}
+            <div
+              className="flex min-h-full items-center justify-center p-2 md:p-4"
+              style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 16px)" }}
+            >
               <motion.div
                 role="dialog"
                 aria-modal="true"
