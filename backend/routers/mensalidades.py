@@ -42,9 +42,10 @@ def _atualizar_atrasados(db: Session, mes: str):
     except (ValueError, IndexError):
         return
 
-    hoje = datetime.now()
-    if hoje <= data_venc:
-        return  # Ainda nao venceu
+    hoje = datetime.now().date()
+    # Atrasa a partir do dia SEGUINTE ao vencimento (dia 16 se vencimento e dia 15)
+    if hoje <= data_venc.date():
+        return  # Ainda nao venceu (hoje e o dia do vencimento ou antes)
 
     # Buscar pendentes desse mes e marcar como atrasado
     pendentes = (
