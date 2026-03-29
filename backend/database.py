@@ -20,7 +20,7 @@ def _set_sqlite_pragma(dbapi_conn, connection_record):
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.close()
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):
