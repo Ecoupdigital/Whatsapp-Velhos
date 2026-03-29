@@ -2,7 +2,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base, SessionLocal
+from database import engine, Base, SessionLocal, DB_PATH
 from models import Usuario, Conta
 from auth import hash_password
 
@@ -120,3 +120,16 @@ def on_shutdown():
 @app.get("/")
 def root():
     return {"app": "Velhos Parceiros FC", "version": "1.0.0", "docs": "/docs"}
+
+
+@app.get("/api/debug/jogadores-raw")
+def debug_jogadores_raw():
+    """Test endpoint using raw sqlite3 to isolate SQLAlchemy issues."""
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT id, nome FROM jogadores ORDER BY nome")
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
