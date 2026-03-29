@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import os
+import threading
 
 DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "velhos.db"))
 DATABASE_URL = f"sqlite:///{DB_PATH}"
@@ -27,9 +28,12 @@ class Base(DeclarativeBase):
     pass
 
 
+_db_lock = threading.Lock()
+
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    with _db_lock:
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
