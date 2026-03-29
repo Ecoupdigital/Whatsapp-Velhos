@@ -19,9 +19,12 @@ self.addEventListener("activate", (event) => {
 
 // Fetch: network-first with cache fallback
 self.addEventListener("fetch", (event) => {
-  // Skip non-GET and API requests
+  const url = new URL(event.request.url);
+
+  // Skip non-http(s), non-GET, and API requests
+  if (!url.protocol.startsWith("http")) return;
   if (event.request.method !== "GET") return;
-  if (event.request.url.includes("/api/")) return;
+  if (url.pathname.includes("/api/")) return;
 
   event.respondWith(
     fetch(event.request)
