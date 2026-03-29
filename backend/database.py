@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, event
-from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import os
+import sqlite3
 
 DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "velhos.db"))
 DATABASE_URL = f"sqlite:///{DB_PATH}"
@@ -9,7 +9,6 @@ DATABASE_URL = f"sqlite:///{DB_PATH}"
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
-    poolclass=NullPool,
 )
 
 @event.listens_for(engine, "connect")
@@ -32,4 +31,5 @@ def get_db():
     try:
         yield db
     finally:
+        db.rollback()
         db.close()
