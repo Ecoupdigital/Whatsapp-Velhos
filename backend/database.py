@@ -28,7 +28,13 @@ class Base(DeclarativeBase):
     pass
 
 
+_call_count = 0
+
 def get_db():
+    global _call_count
+    _call_count += 1
+    import logging
+    logging.getLogger(__name__).warning("get_db called #%d", _call_count)
     db = SessionLocal()
     try:
         yield db
