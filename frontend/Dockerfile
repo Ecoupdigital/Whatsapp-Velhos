@@ -3,11 +3,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install
+RUN npm install --include=dev
 
 COPY frontend/ .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG BACKEND_URL=http://velhos-backend:8000
+ENV BACKEND_URL=${BACKEND_URL}
 RUN npm run build
 
 FROM node:20-alpine AS runner
