@@ -1,8 +1,7 @@
 from sqlalchemy import create_engine, event
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import os
-import threading
 
 DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "velhos.db"))
 DATABASE_URL = f"sqlite:///{DB_PATH}"
@@ -10,7 +9,7 @@ DATABASE_URL = f"sqlite:///{DB_PATH}"
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+    poolclass=NullPool,
 )
 
 @event.listens_for(engine, "connect")
@@ -28,12 +27,9 @@ class Base(DeclarativeBase):
     pass
 
 
-_db_lock = threading.Lock()
-
 def get_db():
-    with _db_lock:
-        db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
