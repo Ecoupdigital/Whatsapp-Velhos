@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, event
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import os
 
@@ -8,9 +9,7 @@ DATABASE_URL = f"sqlite:///{DB_PATH}"
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
-    pool_size=5,
-    max_overflow=10,
-    pool_pre_ping=True,
+    poolclass=StaticPool,
 )
 
 @event.listens_for(engine, "connect")
