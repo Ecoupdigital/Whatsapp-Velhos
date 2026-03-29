@@ -122,7 +122,7 @@ def root():
     return {"app": "Velhos Parceiros FC", "version": "1.0.0", "docs": "/docs"}
 
 
-@app.get("/api/debug/jogadores-raw")
+@app.get("/debug/jogadores-raw")
 def debug_jogadores_raw():
     """Test endpoint using raw sqlite3 to isolate SQLAlchemy issues."""
     import sqlite3
