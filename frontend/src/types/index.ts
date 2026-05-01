@@ -194,6 +194,10 @@ export interface EventoCreate {
   valor_jogador?: number;
   valor_socio?: number;
   meta_arrecadacao?: number;
+  valor_cartao?: number;
+  custo_cartao?: number;
+  qtd_cartoes_padrao_jogador?: number;
+  qtd_cartoes_padrao_socio?: number;
 }
 
 export interface EventoUpdate {
@@ -209,6 +213,10 @@ export interface EventoUpdate {
   valor_jogador?: number | null;
   valor_socio?: number | null;
   meta_arrecadacao?: number | null;
+  valor_cartao?: number | null;
+  custo_cartao?: number | null;
+  qtd_cartoes_padrao_jogador?: number | null;
+  qtd_cartoes_padrao_socio?: number | null;
 }
 
 export interface EventoOut {
@@ -225,6 +233,10 @@ export interface EventoOut {
   valor_jogador: number;
   valor_socio: number;
   meta_arrecadacao: number;
+  valor_cartao: number;
+  custo_cartao: number;
+  qtd_cartoes_padrao_jogador: number;
+  qtd_cartoes_padrao_socio: number;
   created_at: string | null;
 }
 
@@ -249,8 +261,23 @@ export interface ParticipanteOut {
   data_pagamento: string | null;
   forma_pagto: string | null;
   conta_id: number | null;
+  qtd_cartoes_recebidos: number;
+  numero_inicio: number | null;
+  numero_fim: number | null;
+  qtd_vendidos: number;
+  qtd_devolvidos: number;
+  qtd_pagou_custo: number;
   observacoes: string | null;
   jogador: JogadorOut | null;
+}
+
+export interface CartoesUpdate {
+  qtd_cartoes_recebidos?: number | null;
+  numero_inicio?: number | null;
+  numero_fim?: number | null;
+  qtd_vendidos?: number | null;
+  qtd_devolvidos?: number | null;
+  qtd_pagou_custo?: number | null;
 }
 
 export interface PagamentoCreate {
@@ -279,6 +306,11 @@ export interface EventoResumo {
   valor_esperado: number;
   percentual_meta: number;
   meta_arrecadacao: number;
+  cartoes_emitidos: number;
+  cartoes_vendidos: number;
+  cartoes_devolvidos: number;
+  cartoes_pagou_custo: number;
+  proximo_numero: number;
 }
 
 // === Jogos ===

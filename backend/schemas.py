@@ -220,6 +220,10 @@ class EventoCreate(BaseModel):
     valor_jogador: float = 0
     valor_socio: float = 0
     meta_arrecadacao: float = 0
+    valor_cartao: float = 0
+    custo_cartao: float = 0
+    qtd_cartoes_padrao_jogador: int = 0
+    qtd_cartoes_padrao_socio: int = 0
 
 class EventoUpdate(BaseModel):
     tipo: Optional[str] = None
@@ -234,6 +238,10 @@ class EventoUpdate(BaseModel):
     valor_jogador: Optional[float] = None
     valor_socio: Optional[float] = None
     meta_arrecadacao: Optional[float] = None
+    valor_cartao: Optional[float] = None
+    custo_cartao: Optional[float] = None
+    qtd_cartoes_padrao_jogador: Optional[int] = None
+    qtd_cartoes_padrao_socio: Optional[int] = None
 
 class EventoOut(BaseModel):
     id: int
@@ -249,6 +257,10 @@ class EventoOut(BaseModel):
     valor_jogador: float = 0
     valor_socio: float = 0
     meta_arrecadacao: float = 0
+    valor_cartao: float = 0
+    custo_cartao: float = 0
+    qtd_cartoes_padrao_jogador: int = 0
+    qtd_cartoes_padrao_socio: int = 0
     created_at: Optional[str]
 
     class Config:
@@ -293,6 +305,19 @@ class EventoResumo(BaseModel):
     valor_esperado: float
     percentual_meta: float
     meta_arrecadacao: float
+    cartoes_emitidos: int = 0
+    cartoes_vendidos: int = 0
+    cartoes_devolvidos: int = 0
+    cartoes_pagou_custo: int = 0
+    proximo_numero: int = 1
+
+class CartoesUpdate(BaseModel):
+    qtd_cartoes_recebidos: Optional[int] = None
+    numero_inicio: Optional[int] = None
+    numero_fim: Optional[int] = None
+    qtd_vendidos: Optional[int] = None
+    qtd_devolvidos: Optional[int] = None
+    qtd_pagou_custo: Optional[int] = None
 
 class ParticipanteOut(BaseModel):
     id: int
@@ -306,6 +331,12 @@ class ParticipanteOut(BaseModel):
     data_pagamento: Optional[str] = None
     forma_pagto: Optional[str] = None
     conta_id: Optional[int] = None
+    qtd_cartoes_recebidos: int = 0
+    numero_inicio: Optional[int] = None
+    numero_fim: Optional[int] = None
+    qtd_vendidos: int = 0
+    qtd_devolvidos: int = 0
+    qtd_pagou_custo: int = 0
     observacoes: Optional[str]
     jogador: Optional[JogadorOut] = None
 

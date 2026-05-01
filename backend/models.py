@@ -105,6 +105,10 @@ class Evento(Base):
     valor_jogador = Column(Float, default=0)
     valor_socio = Column(Float, default=0)
     meta_arrecadacao = Column(Float, default=0)
+    valor_cartao = Column(Float, default=0)
+    custo_cartao = Column(Float, default=0)
+    qtd_cartoes_padrao_jogador = Column(Integer, default=0)
+    qtd_cartoes_padrao_socio = Column(Integer, default=0)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 
     participantes = relationship("EventoParticipante", back_populates="evento")
@@ -128,6 +132,12 @@ class EventoParticipante(Base):
     data_pagamento = Column(Text)
     forma_pagto = Column(Text)
     conta_id = Column(Integer, ForeignKey("contas.id"))
+    qtd_cartoes_recebidos = Column(Integer, default=0)
+    numero_inicio = Column(Integer)
+    numero_fim = Column(Integer)
+    qtd_vendidos = Column(Integer, default=0)
+    qtd_devolvidos = Column(Integer, default=0)
+    qtd_pagou_custo = Column(Integer, default=0)
     observacoes = Column(Text)
 
     evento = relationship("Evento", back_populates="participantes")

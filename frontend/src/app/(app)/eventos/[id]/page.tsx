@@ -24,6 +24,7 @@ import {
   RotateCcw,
   UserPlus,
   ChevronDown,
+  Ticket,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -102,6 +103,10 @@ interface EditForm {
   valor_jogador: number;
   valor_socio: number;
   meta_arrecadacao: number;
+  valor_cartao: number;
+  custo_cartao: number;
+  qtd_cartoes_padrao_jogador: number;
+  qtd_cartoes_padrao_socio: number;
 }
 
 function todayISO(): string {
@@ -163,7 +168,24 @@ export default function EventoDetailPage() {
     valor_jogador: 0,
     valor_socio: 0,
     meta_arrecadacao: 0,
+    valor_cartao: 0,
+    custo_cartao: 0,
+    qtd_cartoes_padrao_jogador: 0,
+    qtd_cartoes_padrao_socio: 0,
   });
+
+  // Cartões modal
+  const [cartoesModalOpen, setCartoesModalOpen] = useState(false);
+  const [cartoesParticipante, setCartoesParticipante] = useState<ParticipanteOut | null>(null);
+  const [cartoesForm, setCartoesForm] = useState({
+    qtd_cartoes_recebidos: "",
+    numero_inicio: "",
+    numero_fim: "",
+    qtd_vendidos: "",
+    qtd_devolvidos: "",
+    qtd_pagou_custo: "",
+  });
+  const [cartoesSaving, setCartoesSaving] = useState(false);
 
   // Delete event
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -376,8 +398,61 @@ export default function EventoDetailPage() {
       valor_jogador: evento.valor_jogador || 0,
       valor_socio: evento.valor_socio || 0,
       meta_arrecadacao: evento.meta_arrecadacao || 0,
+      valor_cartao: evento.valor_cartao || 0,
+      custo_cartao: evento.custo_cartao || 0,
+      qtd_cartoes_padrao_jogador: evento.qtd_cartoes_padrao_jogador || 0,
+      qtd_cartoes_padrao_socio: evento.qtd_cartoes_padrao_socio || 0,
     });
     setEditModalOpen(true);
+  };
+
+  const openCartoesModal = (part: ParticipanteOut) => {
+    setCartoesParticipante(part);
+    setCartoesForm({
+      qtd_cartoes_recebidos: String(part.qtd_cartoes_recebidos || 0),
+      numero_inicio: part.numero_inicio != null ? String(part.numero_inicio) : "",
+      numero_fim: part.numero_fim != null ? String(part.numero_fim) : "",
+      qtd_vendidos: String(part.qtd_vendidos || 0),
+      qtd_devolvidos: String(part.qtd_devolvidos || 0),
+      qtd_pagou_custo: String(part.qtd_pagou_custo || 0),
+    });
+    setCartoesModalOpen(true);
+  };
+
+  const handleSaveCartoes = async () => {
+    if (!cartoesParticipante) return;
+    const recebidos = parseInt(cartoesForm.qtd_cartoes_recebidos) || 0;
+    const vendidos = parseInt(cartoesForm.qtd_vendidos) || 0;
+    const devolvidos = parseInt(cartoesForm.qtd_devolvidos) || 0;
+    const pagouCusto = parseInt(cartoesForm.qtd_pagou_custo) || 0;
+
+    if (vendidos + devolvidos + pagouCusto > recebidos) {
+      toast.error("Soma vendidos+devolvidos+pagou_custo nao pode exceder recebidos");
+      return;
+    }
+
+    try {
+      setCartoesSaving(true);
+      await api.put(
+        `/eventos/${eventoId}/participantes/${cartoesParticipante.id}/cartoes`,
+        {
+          qtd_cartoes_recebidos: recebidos,
+          numero_inicio: cartoesForm.numero_inicio ? parseInt(cartoesForm.numero_inicio) : null,
+          numero_fim: cartoesForm.numero_fim ? parseInt(cartoesForm.numero_fim) : null,
+          qtd_vendidos: vendidos,
+          qtd_devolvidos: devolvidos,
+          qtd_pagou_custo: pagouCusto,
+        }
+      );
+      toast.success("Cartoes atualizados");
+      setCartoesModalOpen(false);
+      setCartoesParticipante(null);
+      fetchAll();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao salvar cartoes");
+    } finally {
+      setCartoesSaving(false);
+    }
   };
 
   const handleEditSubmit = async () => {
@@ -400,6 +475,10 @@ export default function EventoDetailPage() {
         valor_jogador: editForm.valor_jogador,
         valor_socio: editForm.valor_socio,
         meta_arrecadacao: editForm.meta_arrecadacao,
+        valor_cartao: editForm.valor_cartao,
+        custo_cartao: editForm.custo_cartao,
+        qtd_cartoes_padrao_jogador: editForm.qtd_cartoes_padrao_jogador,
+        qtd_cartoes_padrao_socio: editForm.qtd_cartoes_padrao_socio,
       };
       await api.put<EventoOut>(`/eventos/${eventoId}`, payload);
       toast.success("Evento atualizado");
@@ -661,6 +740,53 @@ export default function EventoDetailPage() {
         </motion.div>
       )}
 
+      {/* ── Stats Cartões ─────────────────────────────────────── */}
+      {resumo && resumo.cartoes_emitidos > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          className="bg-surface-card border border-border-subtle rounded-lg p-4"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Ticket size={16} className="text-blue-400" />
+            <p className="text-xs font-display uppercase tracking-wider text-txt-secondary">
+              Cartoes
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+            <div>
+              <p className="text-xs text-txt-tertiary font-body">Emitidos</p>
+              <p className="text-xl font-bold font-mono text-txt-primary">{resumo.cartoes_emitidos}</p>
+            </div>
+            <div>
+              <p className="text-xs text-txt-tertiary font-body">Vendidos</p>
+              <p className="text-xl font-bold font-mono text-emerald-400">{resumo.cartoes_vendidos}</p>
+            </div>
+            <div>
+              <p className="text-xs text-txt-tertiary font-body">Devolvidos</p>
+              <p className="text-xl font-bold font-mono text-yellow-400">{resumo.cartoes_devolvidos}</p>
+            </div>
+            <div>
+              <p className="text-xs text-txt-tertiary font-body">Pagou custo</p>
+              <p className="text-xl font-bold font-mono text-blue-400">{resumo.cartoes_pagou_custo}</p>
+            </div>
+            <div>
+              <p className="text-xs text-txt-tertiary font-body">Proximo num.</p>
+              <p className="text-xl font-bold font-mono text-txt-secondary">{resumo.proximo_numero}</p>
+            </div>
+          </div>
+          {resumo.cartoes_emitidos > 0 && (
+            <div className="mt-3 h-1.5 bg-surface-tertiary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all"
+                style={{ width: `${(resumo.cartoes_vendidos / resumo.cartoes_emitidos) * 100}%` }}
+              />
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* ── Toolbar + Filtros ─────────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -782,10 +908,21 @@ export default function EventoDetailPage() {
                               {tipo}
                             </span>
                           </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-txt-tertiary font-mono">
+                          <div className="flex items-center gap-3 mt-0.5 text-xs text-txt-tertiary font-mono flex-wrap">
                             <span>
                               {formatCurrency(part.valor_pago || 0)} / {formatCurrency(part.valor || 0)}
                             </span>
+                            {part.qtd_cartoes_recebidos > 0 && (
+                              <span className="text-blue-400">
+                                <Ticket size={10} className="inline mr-1" />
+                                {part.qtd_vendidos}/{part.qtd_cartoes_recebidos}
+                                {part.numero_inicio != null && part.numero_fim != null && (
+                                  <span className="text-txt-tertiary ml-1">
+                                    ({part.numero_inicio}-{part.numero_fim})
+                                  </span>
+                                )}
+                              </span>
+                            )}
                             {contaNome(part.conta_id) && (
                               <span className="text-txt-secondary">{contaNome(part.conta_id)}</span>
                             )}
@@ -798,6 +935,15 @@ export default function EventoDetailPage() {
                         )}>
                           {status}
                         </span>
+
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Ticket size={14} />}
+                          onClick={() => openCartoesModal(part)}
+                        >
+                          Cartoes
+                        </Button>
 
                         <Button
                           size="sm"
@@ -989,6 +1135,86 @@ export default function EventoDetailPage() {
         </ModalFooter>
       </Modal>
 
+      {/* ── Cartões Modal ────────────────────────────────────── */}
+      <Modal open={cartoesModalOpen} onClose={() => setCartoesModalOpen(false)} size="md">
+        <ModalHeader>
+          Cartoes - {cartoesParticipante ? nomeParticipante(cartoesParticipante) : ""}
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          {evento && (
+            <div className="text-xs text-txt-tertiary font-body bg-surface-secondary p-3 rounded-lg">
+              <p>Valor cartao: <span className="font-mono text-txt-secondary">{formatCurrency(evento.valor_cartao || 0)}</span></p>
+              <p>Custo cartao: <span className="font-mono text-txt-secondary">{formatCurrency(evento.custo_cartao || 0)}</span></p>
+              {resumo && (
+                <p className="mt-1">Proximo numero disponivel: <span className="font-mono text-txt-secondary">{resumo.proximo_numero}</span></p>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Recebidos"
+              type="number"
+              min={0}
+              value={cartoesForm.qtd_cartoes_recebidos}
+              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_cartoes_recebidos: e.target.value }))}
+            />
+            <Input
+              label="Numero inicial"
+              type="number"
+              min={0}
+              value={cartoesForm.numero_inicio}
+              onChange={(e) => setCartoesForm((p) => ({ ...p, numero_inicio: e.target.value }))}
+            />
+            <Input
+              label="Numero final"
+              type="number"
+              min={0}
+              value={cartoesForm.numero_fim}
+              onChange={(e) => setCartoesForm((p) => ({ ...p, numero_fim: e.target.value }))}
+            />
+          </div>
+
+          <p className="text-xs text-txt-tertiary uppercase tracking-wider font-display pt-2">
+            Reconciliacao
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Vendidos"
+              type="number"
+              min={0}
+              value={cartoesForm.qtd_vendidos}
+              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_vendidos: e.target.value }))}
+            />
+            <Input
+              label="Devolvidos"
+              type="number"
+              min={0}
+              value={cartoesForm.qtd_devolvidos}
+              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_devolvidos: e.target.value }))}
+            />
+            <Input
+              label="Pagou custo"
+              type="number"
+              min={0}
+              value={cartoesForm.qtd_pagou_custo}
+              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_pagou_custo: e.target.value }))}
+            />
+          </div>
+          <p className="text-xs text-txt-tertiary font-body">
+            Soma deve fechar com Recebidos. Devolvidos nao pagam. Pagou custo paga apenas o custo (R$ {(evento?.custo_cartao || 0).toFixed(2)}).
+          </p>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setCartoesModalOpen(false)}>
+            Cancelar
+          </Button>
+          <Button loading={cartoesSaving} onClick={handleSaveCartoes}>
+            Salvar
+          </Button>
+        </ModalFooter>
+      </Modal>
+
       {/* ── Edit Event Modal ─────────────────────────────────── */}
       <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} size="lg">
         <ModalHeader>Editar Evento</ModalHeader>
@@ -1054,6 +1280,47 @@ export default function EventoDetailPage() {
               value={editForm.meta_arrecadacao || ""}
               onChange={(e) => updateEditField("meta_arrecadacao", parseFloat(e.target.value) || 0)}
             />
+          </div>
+
+          <div className="pt-2 border-t border-border-subtle">
+            <p className="text-xs text-txt-tertiary uppercase tracking-wider font-display mb-3">
+              Cartoes (opcional)
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Input
+                label="Valor cartao (R$)"
+                type="number"
+                min={0}
+                step={0.01}
+                value={editForm.valor_cartao || ""}
+                onChange={(e) => updateEditField("valor_cartao", parseFloat(e.target.value) || 0)}
+              />
+              <Input
+                label="Custo cartao (R$)"
+                type="number"
+                min={0}
+                step={0.01}
+                value={editForm.custo_cartao || ""}
+                onChange={(e) => updateEditField("custo_cartao", parseFloat(e.target.value) || 0)}
+              />
+              <Input
+                label="Padrao jogador"
+                type="number"
+                min={0}
+                value={editForm.qtd_cartoes_padrao_jogador || ""}
+                onChange={(e) => updateEditField("qtd_cartoes_padrao_jogador", parseInt(e.target.value) || 0)}
+              />
+              <Input
+                label="Padrao socio"
+                type="number"
+                min={0}
+                value={editForm.qtd_cartoes_padrao_socio || ""}
+                onChange={(e) => updateEditField("qtd_cartoes_padrao_socio", parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <p className="text-xs text-txt-tertiary mt-2 font-body">
+              Quando &quot;valor cartao&quot; for definido, o valor cobrado de cada participante e calculado automaticamente: vendidos x valor_cartao + pagou_custo x custo_cartao.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

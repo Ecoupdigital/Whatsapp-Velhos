@@ -11,6 +11,7 @@ from schemas import (
     ParticipanteAvulsoCreate,
     PagamentoCreate, PagamentoOut,
     EventoResumo,
+    CartoesUpdate,
 )
 from auth import get_current_user
 
@@ -137,14 +138,35 @@ def adicionar_avulso(evento_id: int, data: ParticipanteAvulsoCreate, db: Session
     return p
 
 
+def _proximo_numero(db: Session, evento_id: int) -> int:
+    """Proximo numero disponivel pra cartoes nesse evento."""
+    max_fim = (
+        db.query(func.max(EventoParticipante.numero_fim))
+        .filter(EventoParticipante.evento_id == evento_id)
+        .scalar()
+    )
+    return (max_fim or 0) + 1
+
+
+def _recalcular_valor_esperado(p: EventoParticipante, evento: Evento):
+    """Valor esperado = vendidos*valor_cartao + pagou_custo*custo_cartao."""
+    if evento.valor_cartao or evento.custo_cartao:
+        valor = (
+            (p.qtd_vendidos or 0) * (evento.valor_cartao or 0)
+            + (p.qtd_pagou_custo or 0) * (evento.custo_cartao or 0)
+        )
+        p.valor = float(valor)
+
+
 @router.post("/{evento_id}/popular", response_model=list[ParticipanteOut])
 def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
-    """Adiciona todos jogadores ativos ao evento com valor padrao baseado em tipo."""
+    """Adiciona todos jogadores ativos ao evento com valor + cartoes padrao."""
     e = db.query(Evento).filter(Evento.id == evento_id).first()
     if not e:
         raise HTTPException(status_code=404, detail="Evento nao encontrado")
 
     jogadores = db.query(Jogador).filter(Jogador.ativo == 1).all()
+    proximo = _proximo_numero(db, evento_id)
 
     for j in jogadores:
         existing = db.query(EventoParticipante).filter(
@@ -154,14 +176,33 @@ def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
         if existing:
             continue
 
-        valor = e.valor_socio if j.tipo == "socio" else e.valor_jogador
+        is_socio = j.tipo == "socio"
+        qtd = (e.qtd_cartoes_padrao_socio if is_socio else e.qtd_cartoes_padrao_jogador) or 0
+
+        # Valor padrao: por valor fixo OU por cartoes (se valor_cartao definido)
+        if e.valor_cartao and qtd > 0:
+            # Valor presume que vai vender tudo
+            valor = qtd * e.valor_cartao
+        else:
+            valor = (e.valor_socio if is_socio else e.valor_jogador) or 0
+
+        numero_ini = None
+        numero_f = None
+        if qtd > 0:
+            numero_ini = proximo
+            numero_f = proximo + qtd - 1
+            proximo = numero_f + 1
+
         p = EventoParticipante(
             evento_id=evento_id,
             jogador_id=j.id,
-            valor=valor or 0,
+            valor=valor,
             valor_pago=0,
             status="pendente",
             pago=0,
+            qtd_cartoes_recebidos=qtd,
+            numero_inicio=numero_ini,
+            numero_fim=numero_f,
         )
         db.add(p)
     db.commit()
@@ -173,6 +214,61 @@ def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
         .order_by(EventoParticipante.id)
         .all()
     )
+
+
+@router.put("/{evento_id}/participantes/{participante_id}/cartoes", response_model=ParticipanteOut)
+def atualizar_cartoes(
+    evento_id: int,
+    participante_id: int,
+    data: CartoesUpdate,
+    db: Session = Depends(get_db),
+):
+    """Atualiza cartoes do participante e recalcula valor esperado."""
+    p = (
+        db.query(EventoParticipante)
+        .options(joinedload(EventoParticipante.evento), joinedload(EventoParticipante.jogador))
+        .filter(
+            EventoParticipante.id == participante_id,
+            EventoParticipante.evento_id == evento_id,
+        )
+        .first()
+    )
+    if not p:
+        raise HTTPException(status_code=404, detail="Participante nao encontrado")
+
+    payload = data.model_dump(exclude_unset=True)
+
+    # Auto-ajusta numero_fim se mudou qtd_recebidos e tem numero_inicio
+    if "qtd_cartoes_recebidos" in payload:
+        novo_qtd = payload["qtd_cartoes_recebidos"] or 0
+        if novo_qtd > 0 and p.numero_inicio is None and "numero_inicio" not in payload:
+            # Auto-numerar a partir do proximo disponivel
+            proximo = _proximo_numero(db, evento_id)
+            payload["numero_inicio"] = proximo
+            payload["numero_fim"] = proximo + novo_qtd - 1
+        elif novo_qtd > 0 and p.numero_inicio is not None and "numero_fim" not in payload:
+            payload["numero_fim"] = p.numero_inicio + novo_qtd - 1
+
+    for field, value in payload.items():
+        setattr(p, field, value)
+
+    # Validacao reconciliacao: vendidos + devolvidos + pagou_custo <= recebidos
+    total_destino = (p.qtd_vendidos or 0) + (p.qtd_devolvidos or 0) + (p.qtd_pagou_custo or 0)
+    if total_destino > (p.qtd_cartoes_recebidos or 0):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Soma vendidos+devolvidos+pagou_custo ({total_destino}) excede recebidos ({p.qtd_cartoes_recebidos})",
+        )
+
+    if p.evento:
+        _recalcular_valor_esperado(p, p.evento)
+
+    # Recalcula status pago derivado
+    p.pago = 1 if p.valor and p.valor_pago and p.valor_pago >= p.valor else 0
+
+    db.commit()
+    db.refresh(p)
+    return p
 
 
 @router.delete("/{evento_id}/participantes/{participante_id}")
@@ -313,6 +409,12 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
     meta = e.meta_arrecadacao or 0
     pct = (valor_arrecadado / meta * 100) if meta > 0 else 0.0
 
+    cartoes_emitidos = sum(p.qtd_cartoes_recebidos or 0 for p in parts)
+    cartoes_vendidos = sum(p.qtd_vendidos or 0 for p in parts)
+    cartoes_devolvidos = sum(p.qtd_devolvidos or 0 for p in parts)
+    cartoes_pagou_custo = sum(p.qtd_pagou_custo or 0 for p in parts)
+    proximo_num = _proximo_numero(db, evento_id)
+
     return EventoResumo(
         total_participantes=len(parts),
         pagos=pagos,
@@ -322,4 +424,9 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
         valor_esperado=valor_esperado,
         percentual_meta=round(pct, 1),
         meta_arrecadacao=meta,
+        cartoes_emitidos=cartoes_emitidos,
+        cartoes_vendidos=cartoes_vendidos,
+        cartoes_devolvidos=cartoes_devolvidos,
+        cartoes_pagou_custo=cartoes_pagou_custo,
+        proximo_numero=proximo_num,
     )
