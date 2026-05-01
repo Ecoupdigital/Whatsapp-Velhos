@@ -74,11 +74,10 @@ def on_startup():
     finally:
         db.close()
 
-    # Start scheduler (temporarily disabled for debugging)
-    # try:
-    #     start_scheduler(app)
-    # except Exception:
-    #     log.exception("Erro ao iniciar scheduler")
+    try:
+        start_scheduler(app)
+    except Exception:
+        log.exception("Erro ao iniciar scheduler")
 
 
 @app.on_event("shutdown")
