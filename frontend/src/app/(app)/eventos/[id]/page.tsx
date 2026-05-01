@@ -11,8 +11,6 @@ import {
   Plus,
   Check,
   X,
-  Clock,
-  HelpCircle,
   DollarSign,
   Plane,
   Music,
