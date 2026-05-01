@@ -45,3 +45,29 @@ async def send_text_message(number: str, text: str) -> dict:
         except Exception as e:
             log.error(f"Erro ao enviar mensagem para {number}: {e}")
             return {"success": False, "message_id": "", "error": str(e)}
+
+
+async def get_group_participants(group_jid: str) -> list[dict]:
+    """Retorna lista de participantes do grupo. Cada item: {phone, name}."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{API_URL}/group/info",
+                headers={"token": TOKEN, "Content-Type": "application/json"},
+                json={"groupjid": group_jid},
+                timeout=15,
+            )
+            data = resp.json()
+            participantes = data.get("Participants", []) or []
+            result = []
+            for p in participantes:
+                phone = (p.get("PhoneNumber") or "").replace("@s.whatsapp.net", "")
+                if phone:
+                    result.append({
+                        "phone": phone,
+                        "name": p.get("PushName") or p.get("FullName") or "",
+                    })
+            return result
+        except Exception as e:
+            log.error(f"Erro ao buscar participantes do grupo: {e}")
+            return []

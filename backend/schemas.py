@@ -36,6 +36,7 @@ class JogadorCreate(BaseModel):
     data_entrada: Optional[str] = None
     ativo: int = 1
     excluido_envio: int = 0
+    excluido_mensalidade: int = 0
     observacoes: Optional[str] = None
 
 class JogadorUpdate(BaseModel):
@@ -49,6 +50,7 @@ class JogadorUpdate(BaseModel):
     data_entrada: Optional[str] = None
     ativo: Optional[int] = None
     excluido_envio: Optional[int] = None
+    excluido_mensalidade: Optional[int] = None
     observacoes: Optional[str] = None
 
 class JogadorOut(BaseModel):
@@ -63,6 +65,7 @@ class JogadorOut(BaseModel):
     data_entrada: Optional[str]
     ativo: int
     excluido_envio: int
+    excluido_mensalidade: int = 0
     observacoes: Optional[str]
     created_at: Optional[str]
     updated_at: Optional[str]

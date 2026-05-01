@@ -13,13 +13,15 @@ import {
   CheckSquare,
   Square,
   X,
+  AlertCircle,
+  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { JogadorOut, JogadorCreate, JogadorUpdate } from "@/types";
+import type { JogadorOut, JogadorCreate, JogadorUpdate, SugestoesGrupo } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -49,6 +51,7 @@ interface JogadorForm {
   observacoes: string;
   ativo: boolean;
   excluido_envio: boolean;
+  excluido_mensalidade: boolean;
 }
 
 const emptyForm: JogadorForm = {
@@ -63,6 +66,7 @@ const emptyForm: JogadorForm = {
   observacoes: "",
   ativo: true,
   excluido_envio: false,
+  excluido_mensalidade: false,
 };
 
 /* ─── Helpers ───────────────────────────────────────────────── */
@@ -80,6 +84,7 @@ function formToCreate(f: JogadorForm): JogadorCreate {
     observacoes: f.observacoes || null,
     ativo: f.ativo ? 1 : 0,
     excluido_envio: f.excluido_envio ? 1 : 0,
+    excluido_mensalidade: f.excluido_mensalidade ? 1 : 0,
   };
 }
 
@@ -100,6 +105,7 @@ function jogadorToForm(j: JogadorOut): JogadorForm {
     observacoes: j.observacoes ?? "",
     ativo: j.ativo === 1,
     excluido_envio: j.excluido_envio === 1,
+    excluido_mensalidade: j.excluido_mensalidade === 1,
   };
 }
 
@@ -166,6 +172,11 @@ export default function JogadoresPage() {
   const [bulkSaving, setBulkSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  // Sugestoes do grupo WhatsApp (telefones do grupo sem cadastro)
+  const [sugestoes, setSugestoes] = useState<SugestoesGrupo | null>(null);
+  const [sugestoesOpen, setSugestoesOpen] = useState(false);
+  const [sugestoesLoading, setSugestoesLoading] = useState(false);
+
   /* ─ fetch ─ */
   const fetchJogadores = useCallback(async () => {
     setLoading(true);
@@ -193,10 +204,29 @@ export default function JogadoresPage() {
     fetchJogadores();
   }, [fetchJogadores]);
 
+  /* ─ fetch sugestoes do grupo ─ */
+  const fetchSugestoes = useCallback(async () => {
+    setSugestoesLoading(true);
+    try {
+      const data = await api.get<SugestoesGrupo>("/jogadores/grupo/sugestoes");
+      setSugestoes(data);
+    } catch {
+      // Silencioso - WhatsApp pode estar offline
+      setSugestoes(null);
+    } finally {
+      setSugestoesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSugestoes();
+  }, [fetchSugestoes]);
+
   /* ─ modal handlers ─ */
-  function openCreate() {
+  function openCreate(prefilledPhone?: string) {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, telefone: prefilledPhone || "" });
+    setSugestoesOpen(false);
     setModalOpen(true);
   }
 
@@ -239,6 +269,7 @@ export default function JogadoresPage() {
       }
       closeModal();
       fetchJogadores();
+      fetchSugestoes();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro ao salvar";
       toast.error(msg);
@@ -369,10 +400,30 @@ export default function JogadoresPage() {
             Gerencie o elenco do Velhos Parceiros
           </p>
         </div>
-        <Button icon={<Plus />} onClick={openCreate}>
+        <Button icon={<Plus />} onClick={() => openCreate()}>
           Novo Jogador
         </Button>
       </div>
+
+      {/* ─── Sugestoes do grupo WhatsApp ────────────────────── */}
+      {sugestoes && sugestoes.sem_cadastro.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setSugestoesOpen(true)}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15 transition-colors text-left"
+        >
+          <AlertCircle size={18} className="text-amber-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-display uppercase tracking-wider text-amber-400">
+              {sugestoes.sem_cadastro.length} {sugestoes.sem_cadastro.length === 1 ? "numero" : "numeros"} no grupo sem cadastro
+            </p>
+            <p className="text-xs text-txt-secondary font-body mt-0.5">
+              Clique para ver e decidir quem cadastrar como jogador
+            </p>
+          </div>
+          <span className="text-xs text-amber-400/70 font-body">Ver</span>
+        </button>
+      )}
 
       {/* ─── Filter bar ─────────────────────────────────────── */}
       <Card padding="sm">
@@ -494,7 +545,7 @@ export default function JogadoresPage() {
               <p className="text-txt-secondary font-body text-sm">
                 Nenhum jogador encontrado
               </p>
-              <Button size="sm" onClick={openCreate} icon={<Plus />}>
+              <Button size="sm" onClick={() => openCreate()} icon={<Plus />}>
                 Adicionar Jogador
               </Button>
             </div>
@@ -643,7 +694,7 @@ export default function JogadoresPage() {
             <p className="text-txt-secondary font-body text-sm">
               Nenhum jogador encontrado
             </p>
-            <Button size="sm" onClick={openCreate} icon={<Plus />}>
+            <Button size="sm" onClick={() => openCreate()} icon={<Plus />}>
               Adicionar Jogador
             </Button>
           </div>
@@ -879,7 +930,7 @@ export default function JogadoresPage() {
             </div>
 
             {/* toggles */}
-            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+            <div className="flex flex-col gap-3 pt-2">
               <Toggle
                 checked={form.ativo}
                 onChange={(v) => updateField("ativo", v)}
@@ -889,6 +940,11 @@ export default function JogadoresPage() {
                 checked={form.excluido_envio}
                 onChange={(v) => updateField("excluido_envio", v)}
                 label="Excluido do envio de mensagens"
+              />
+              <Toggle
+                checked={form.excluido_mensalidade}
+                onChange={(v) => updateField("excluido_mensalidade", v)}
+                label="Nao gerar mensalidade pra esse jogador"
               />
             </div>
           </ModalBody>
@@ -977,6 +1033,59 @@ export default function JogadoresPage() {
           </Button>
           <Button loading={bulkSaving} onClick={handleBulkEdit}>
             Aplicar a {selected.size} jogador{selected.size !== 1 ? "es" : ""}
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* ─── Sugestoes do grupo Modal ──────────────────────── */}
+      <Modal open={sugestoesOpen} onClose={() => setSugestoesOpen(false)} size="md">
+        <ModalHeader>
+          Numeros no grupo sem cadastro
+        </ModalHeader>
+        <ModalBody className="space-y-3 max-h-[70vh] overflow-y-auto">
+          {sugestoesLoading ? (
+            <p className="text-sm text-txt-secondary font-body">Carregando...</p>
+          ) : !sugestoes || sugestoes.sem_cadastro.length === 0 ? (
+            <p className="text-sm text-txt-secondary font-body">
+              Todos os membros do grupo estao cadastrados.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-txt-tertiary font-body">
+                {sugestoes.total_no_grupo} no grupo - {sugestoes.total_cadastrados} cadastrados.
+                Cadastre apenas quem voce quiser que receba mensagens.
+              </p>
+              {sugestoes.sem_cadastro.map((s) => (
+                <div
+                  key={s.telefone}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle bg-surface-card"
+                >
+                  <Phone size={14} className="text-txt-tertiary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-mono text-txt-primary truncate">{s.telefone}</p>
+                    {s.nome && (
+                      <p className="text-xs text-txt-secondary font-body truncate">{s.nome}</p>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<UserPlus size={14} />}
+                    onClick={() => openCreate(s.telefone)}
+                  >
+                    Cadastrar
+                  </Button>
+                </div>
+              ))}
+            </>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setSugestoesOpen(false)}>
+            Fechar
+          </Button>
+          <Button onClick={fetchSugestoes} loading={sugestoesLoading}>
+            Atualizar
           </Button>
         </ModalFooter>
       </Modal>

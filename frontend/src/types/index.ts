@@ -31,6 +31,7 @@ export interface JogadorCreate {
   data_entrada?: string | null;
   ativo?: number;
   excluido_envio?: number;
+  excluido_mensalidade?: number;
   observacoes?: string | null;
 }
 
@@ -45,6 +46,7 @@ export interface JogadorUpdate {
   data_entrada?: string | null;
   ativo?: number | null;
   excluido_envio?: number | null;
+  excluido_mensalidade?: number | null;
   observacoes?: string | null;
 }
 
@@ -60,9 +62,16 @@ export interface JogadorOut {
   data_entrada: string | null;
   ativo: number;
   excluido_envio: number;
+  excluido_mensalidade: number;
   observacoes: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface SugestoesGrupo {
+  total_no_grupo: number;
+  total_cadastrados: number;
+  sem_cadastro: { telefone: string; nome: string }[];
 }
 
 // === Mensalidades ===

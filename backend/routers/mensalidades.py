@@ -171,7 +171,11 @@ def excluir(mensalidade_id: int, db: Session = Depends(get_db)):
 
 @router.post("/gerar", response_model=list[MensalidadeOut])
 def gerar_mensalidades(req: GerarMensalidadesRequest, db: Session = Depends(get_db)):
-    jogadores = db.query(Jogador).filter(Jogador.ativo == 1).all()
+    jogadores = (
+        db.query(Jogador)
+        .filter(Jogador.ativo == 1, Jogador.excluido_mensalidade == 0)
+        .all()
+    )
     criadas = []
 
     for j in jogadores:

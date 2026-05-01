@@ -32,25 +32,19 @@ A spec OpenAPI completa esta em `uazapi/uazapi-openapi-spec.yaml` (13.548 linhas
 
 ## Automacoes
 
-### Lembrete de Mensalidade - Velhos Parceiros F.C
-- **Script**: `lembrete_mensalidade.py`
-- **Cron**: Todo dia 06 as 10:00 BRT (13:00 UTC)
-- **Servidor**: server-ecoup (VPS) em `/home/projects/Whatsapp-Velhos/`
-- **Log**: `/home/projects/Whatsapp-Velhos/lembrete_mensalidade.log`
-- **Grupo**: VELHOS PARCEIROS F.C (JID: `555499591730-1606008393@g.us`)
-- **Delay**: 3-5 segundos entre cada mensagem
-- **Excluidos** (12 numeros): Acassio, Otavio, Vagner Velhos, Felipe Rosa, Jonathan (proprio), e mais 7
+### Cobranca de Mensalidade - Velhos Parceiros F.C
+Sistema unificado dentro do app FastAPI (sem cron host). Scheduler do backend
+roda 3 jobs em horario BRT:
+- Dia 6 10h: lembrete pra pendentes
+- Dia 14 10h: aviso de vencimento
+- Dia 20 10h: cobranca com multa
 
-### Verificar log do ultimo envio
-```bash
-ssh server-ecoup "cat /home/projects/Whatsapp-Velhos/lembrete_mensalidade.log"
-```
+Filtra apenas jogadores cadastrados, ativos, com telefone, sem `excluido_envio=1`.
+Templates editaveis em `/configuracoes`. Logs em `mensagens_log`.
+Grupo configurado em `configuracoes.whatsapp_group_jid`.
 
-### Editar cron no servidor
-```bash
-ssh server-ecoup "crontab -l"
-ssh server-ecoup "crontab -e"
-```
+Script standalone antigo (`lembrete_mensalidade.py`) e cron host foram
+removidos - estao em `legacy/` por referencia.
 
 ## Exemplos de chamada curl
 

@@ -1,12 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Jogador
+from models import Jogador, Configuracao
 from schemas import JogadorCreate, JogadorUpdate, JogadorOut
 from auth import get_current_user
+from services.whatsapp_service import get_group_participants
 from datetime import datetime
 
 router = APIRouter(prefix="/api/jogadores", tags=["jogadores"], dependencies=[Depends(get_current_user)])
+
+
+def _normalize_phone(phone: str) -> str:
+    """Remove tudo que nao for digito."""
+    return "".join(c for c in (phone or "") if c.isdigit())
 
 
 @router.get("", response_model=list[JogadorOut])
@@ -57,6 +63,40 @@ def atualizar(jogador_id: int, data: JogadorUpdate, db: Session = Depends(get_db
     db.commit()
     db.refresh(jogador)
     return jogador
+
+
+@router.get("/grupo/sugestoes")
+async def sugestoes_grupo(db: Session = Depends(get_db)):
+    """Lista membros do grupo WhatsApp que NAO estao cadastrados como jogador."""
+    cfg = db.query(Configuracao).filter(Configuracao.chave == "whatsapp_group_jid").first()
+    group_jid = cfg.valor if cfg else ""
+    if not group_jid:
+        raise HTTPException(status_code=400, detail="whatsapp_group_jid nao configurado")
+
+    participantes = await get_group_participants(group_jid)
+
+    # Conjunto de telefones cadastrados (so digitos)
+    cadastrados = {
+        _normalize_phone(j.telefone)
+        for j in db.query(Jogador).filter(Jogador.telefone.isnot(None)).all()
+        if j.telefone
+    }
+    cadastrados.discard("")
+
+    sem_cadastro = []
+    for p in participantes:
+        phone_norm = _normalize_phone(p["phone"])
+        if phone_norm and phone_norm not in cadastrados:
+            sem_cadastro.append({
+                "telefone": p["phone"],
+                "nome": p["name"],
+            })
+
+    return {
+        "total_no_grupo": len(participantes),
+        "total_cadastrados": len(cadastrados),
+        "sem_cadastro": sem_cadastro,
+    }
 
 
 @router.delete("/{jogador_id}")

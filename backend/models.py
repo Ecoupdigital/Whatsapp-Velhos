@@ -29,6 +29,7 @@ class Jogador(Base):
     data_entrada = Column(Text)
     ativo = Column(Integer, default=1)
     excluido_envio = Column(Integer, default=0)
+    excluido_mensalidade = Column(Integer, default=0)
     observacoes = Column(Text)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
     updated_at = Column(Text, default=lambda: datetime.now().isoformat(), onupdate=lambda: datetime.now().isoformat())
