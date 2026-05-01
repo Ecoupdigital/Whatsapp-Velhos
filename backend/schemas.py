@@ -186,6 +186,7 @@ class TransacaoOut(BaseModel):
     evento_id: Optional[int]
     conta_id: Optional[int] = None
     mensalidade_id: Optional[int] = None
+    evento_participante_id: Optional[int] = None
     comprovante: Optional[str]
     created_at: Optional[str]
 
@@ -216,6 +217,9 @@ class EventoCreate(BaseModel):
     local: Optional[str] = None
     custo_estimado: float = 0
     status: str = "planejado"
+    valor_jogador: float = 0
+    valor_socio: float = 0
+    meta_arrecadacao: float = 0
 
 class EventoUpdate(BaseModel):
     tipo: Optional[str] = None
@@ -227,6 +231,9 @@ class EventoUpdate(BaseModel):
     custo_estimado: Optional[float] = None
     custo_real: Optional[float] = None
     status: Optional[str] = None
+    valor_jogador: Optional[float] = None
+    valor_socio: Optional[float] = None
+    meta_arrecadacao: Optional[float] = None
 
 class EventoOut(BaseModel):
     id: int
@@ -239,25 +246,66 @@ class EventoOut(BaseModel):
     custo_estimado: float
     custo_real: float
     status: str
+    valor_jogador: float = 0
+    valor_socio: float = 0
+    meta_arrecadacao: float = 0
     created_at: Optional[str]
 
     class Config:
         from_attributes = True
 
 class ParticipanteUpdate(BaseModel):
-    jogador_id: int
+    jogador_id: Optional[int] = None
+    nome_avulso: Optional[str] = None
     status: str = "pendente"
     pago: int = 0
     valor: float = 0
     observacoes: Optional[str] = None
 
+class ParticipanteAvulsoCreate(BaseModel):
+    nome: str
+    valor: float = 0
+
+class PagamentoCreate(BaseModel):
+    valor: float
+    data: Optional[str] = None
+    forma_pagto: Optional[str] = None
+    conta_id: Optional[int] = None
+
+class PagamentoOut(BaseModel):
+    id: int
+    valor: float
+    data: str
+    forma_pagto: Optional[str] = None
+    conta_id: Optional[int] = None
+    evento_participante_id: Optional[int] = None
+    descricao: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class EventoResumo(BaseModel):
+    total_participantes: int
+    pagos: int
+    parciais: int
+    pendentes: int
+    valor_arrecadado: float
+    valor_esperado: float
+    percentual_meta: float
+    meta_arrecadacao: float
+
 class ParticipanteOut(BaseModel):
     id: int
     evento_id: int
-    jogador_id: int
+    jogador_id: Optional[int]
+    nome_avulso: Optional[str] = None
     status: str
     pago: int
     valor: float
+    valor_pago: float = 0
+    data_pagamento: Optional[str] = None
+    forma_pagto: Optional[str] = None
+    conta_id: Optional[int] = None
     observacoes: Optional[str]
     jogador: Optional[JogadorOut] = None
 

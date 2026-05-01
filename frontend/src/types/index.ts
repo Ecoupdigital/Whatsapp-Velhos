@@ -191,6 +191,9 @@ export interface EventoCreate {
   local?: string | null;
   custo_estimado?: number;
   status?: string;
+  valor_jogador?: number;
+  valor_socio?: number;
+  meta_arrecadacao?: number;
 }
 
 export interface EventoUpdate {
@@ -203,6 +206,9 @@ export interface EventoUpdate {
   custo_estimado?: number | null;
   custo_real?: number | null;
   status?: string | null;
+  valor_jogador?: number | null;
+  valor_socio?: number | null;
+  meta_arrecadacao?: number | null;
 }
 
 export interface EventoOut {
@@ -216,11 +222,15 @@ export interface EventoOut {
   custo_estimado: number;
   custo_real: number;
   status: string;
+  valor_jogador: number;
+  valor_socio: number;
+  meta_arrecadacao: number;
   created_at: string | null;
 }
 
 export interface ParticipanteUpdate {
-  jogador_id: number;
+  jogador_id?: number | null;
+  nome_avulso?: string | null;
   status?: string;
   pago?: number;
   valor?: number;
@@ -230,12 +240,45 @@ export interface ParticipanteUpdate {
 export interface ParticipanteOut {
   id: number;
   evento_id: number;
-  jogador_id: number;
+  jogador_id: number | null;
+  nome_avulso: string | null;
   status: string;
   pago: number;
   valor: number;
+  valor_pago: number;
+  data_pagamento: string | null;
+  forma_pagto: string | null;
+  conta_id: number | null;
   observacoes: string | null;
   jogador: JogadorOut | null;
+}
+
+export interface PagamentoCreate {
+  valor: number;
+  data?: string | null;
+  forma_pagto?: string | null;
+  conta_id?: number | null;
+}
+
+export interface PagamentoOut {
+  id: number;
+  valor: number;
+  data: string;
+  forma_pagto: string | null;
+  conta_id: number | null;
+  evento_participante_id: number | null;
+  descricao: string | null;
+}
+
+export interface EventoResumo {
+  total_participantes: number;
+  pagos: number;
+  parciais: number;
+  pendentes: number;
+  valor_arrecadado: number;
+  valor_esperado: number;
+  percentual_meta: number;
+  meta_arrecadacao: number;
 }
 
 // === Jogos ===

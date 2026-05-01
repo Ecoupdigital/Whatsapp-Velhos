@@ -84,6 +84,7 @@ class Transacao(Base):
     evento_id = Column(Integer, ForeignKey("eventos.id"))
     conta_id = Column(Integer, ForeignKey("contas.id"))
     mensalidade_id = Column(Integer, ForeignKey("mensalidades.id", ondelete="SET NULL"))
+    evento_participante_id = Column(Integer, ForeignKey("evento_participantes.id", ondelete="SET NULL"))
     comprovante = Column(Text)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 
@@ -101,6 +102,9 @@ class Evento(Base):
     custo_estimado = Column(Float, default=0)
     custo_real = Column(Float, default=0)
     status = Column(Text, default="planejado")  # planejado | em_andamento | concluido | cancelado
+    valor_jogador = Column(Float, default=0)
+    valor_socio = Column(Float, default=0)
+    meta_arrecadacao = Column(Float, default=0)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 
     participantes = relationship("EventoParticipante", back_populates="evento")
@@ -115,10 +119,15 @@ class EventoParticipante(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     evento_id = Column(Integer, ForeignKey("eventos.id"), nullable=False)
-    jogador_id = Column(Integer, ForeignKey("jogadores.id"), nullable=False)
+    jogador_id = Column(Integer, ForeignKey("jogadores.id"))  # nullable para convidados avulsos
+    nome_avulso = Column(Text)  # nome quando jogador_id is NULL (convidado)
     status = Column(Text, default="pendente")  # confirmado | recusado | pendente | talvez
     pago = Column(Integer, default=0)
     valor = Column(Float, default=0)
+    valor_pago = Column(Float, default=0)
+    data_pagamento = Column(Text)
+    forma_pagto = Column(Text)
+    conta_id = Column(Integer, ForeignKey("contas.id"))
     observacoes = Column(Text)
 
     evento = relationship("Evento", back_populates="participantes")
