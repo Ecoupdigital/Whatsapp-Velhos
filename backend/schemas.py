@@ -98,6 +98,7 @@ class MensalidadeOut(BaseModel):
     data_pagamento: Optional[str]
     forma_pagto: Optional[str]
     observacoes: Optional[str]
+    conta_id: Optional[int] = None
     created_at: Optional[str]
     jogador: Optional[JogadorOut] = None
 
@@ -181,6 +182,7 @@ class TransacaoOut(BaseModel):
     jogador_id: Optional[int]
     evento_id: Optional[int]
     conta_id: Optional[int] = None
+    mensalidade_id: Optional[int] = None
     comprovante: Optional[str]
     created_at: Optional[str]
 

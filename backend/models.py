@@ -53,6 +53,7 @@ class Mensalidade(Base):
     data_pagamento = Column(Text)
     forma_pagto = Column(Text)  # pix | dinheiro | transferencia
     observacoes = Column(Text)
+    conta_id = Column(Integer, ForeignKey("contas.id"))
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 
     jogador = relationship("Jogador", back_populates="mensalidades")
@@ -81,6 +82,7 @@ class Transacao(Base):
     jogador_id = Column(Integer, ForeignKey("jogadores.id"))
     evento_id = Column(Integer, ForeignKey("eventos.id"))
     conta_id = Column(Integer, ForeignKey("contas.id"))
+    mensalidade_id = Column(Integer, ForeignKey("mensalidades.id", ondelete="SET NULL"))
     comprovante = Column(Text)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 

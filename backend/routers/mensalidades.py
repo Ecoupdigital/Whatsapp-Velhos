@@ -107,25 +107,49 @@ def atualizar(mensalidade_id: int, data: MensalidadeUpdate, db: Session = Depend
     if not m:
         raise HTTPException(status_code=404, detail="Mensalidade nao encontrada")
 
-    # Extrair conta_id antes de setar campos no model (Mensalidade nao tem conta_id)
-    conta_id = data.conta_id
-    for field, value in data.model_dump(exclude_unset=True, exclude={"conta_id"}).items():
+    # Aplica todos os campos enviados (incluindo conta_id, agora persiste na mensalidade)
+    payload = data.model_dump(exclude_unset=True)
+    for field, value in payload.items():
         setattr(m, field, value)
 
-    # Se marcou como pago, cria transacao de entrada automaticamente
-    if data.status == "pago" and data.valor_pago:
+    # Se marcou como pago, sincroniza transacao financeira (uma por mensalidade)
+    if m.status == "pago" and m.valor_pago:
         jogador = db.query(Jogador).filter(Jogador.id == m.jogador_id).first()
         nome = jogador.apelido or jogador.nome if jogador else "Desconhecido"
-        transacao = Transacao(
-            tipo="entrada",
-            categoria="mensalidade",
-            descricao=f"Mensalidade {m.mes_referencia} - {nome}",
-            valor=data.valor_pago,
-            data=data.data_pagamento or datetime.now().strftime("%Y-%m-%d"),
-            jogador_id=m.jogador_id,
-            conta_id=conta_id,
+        descricao = f"Mensalidade {m.mes_referencia} - {nome}"
+        data_tx = m.data_pagamento or datetime.now().strftime("%Y-%m-%d")
+
+        existing_tx = (
+            db.query(Transacao)
+            .filter(Transacao.mensalidade_id == m.id)
+            .first()
         )
-        db.add(transacao)
+        if existing_tx:
+            existing_tx.valor = m.valor_pago
+            existing_tx.data = data_tx
+            existing_tx.descricao = descricao
+            existing_tx.conta_id = m.conta_id
+            existing_tx.jogador_id = m.jogador_id
+        else:
+            db.add(Transacao(
+                tipo="entrada",
+                categoria="mensalidade",
+                descricao=descricao,
+                valor=m.valor_pago,
+                data=data_tx,
+                jogador_id=m.jogador_id,
+                conta_id=m.conta_id,
+                mensalidade_id=m.id,
+            ))
+    elif m.status != "pago":
+        # Status mudou de pago pra outro: remove transacao associada (estorno)
+        existing_tx = (
+            db.query(Transacao)
+            .filter(Transacao.mensalidade_id == m.id)
+            .first()
+        )
+        if existing_tx:
+            db.delete(existing_tx)
 
     db.commit()
     db.refresh(m)
@@ -137,6 +161,9 @@ def excluir(mensalidade_id: int, db: Session = Depends(get_db)):
     m = db.query(Mensalidade).filter(Mensalidade.id == mensalidade_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Mensalidade nao encontrada")
+
+    # Remove transacao financeira associada antes (mantém financeiro consistente)
+    db.query(Transacao).filter(Transacao.mensalidade_id == m.id).delete()
     db.delete(m)
     db.commit()
     return {"ok": True}
