@@ -1,30 +1,28 @@
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import os
 
-DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "velhos.db"))
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+# Priority: DATABASE_URL (postgres in prod) > DATABASE_PATH (sqlite legacy) > local sqlite default
+_url = os.environ.get("DATABASE_URL")
+if not _url:
+    _path = os.environ.get(
+        "DATABASE_PATH",
+        os.path.join(os.path.dirname(__file__), "velhos.db"),
+    )
+    _url = f"sqlite:///{_path}"
 
-# Use pysqlite autocommit mode to avoid implicit BEGIN
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False, "isolation_level": None},
-    pool_size=5,
-    pool_pre_ping=True,
-)
+DATABASE_URL = _url
 
-@event.listens_for(engine, "connect")
-def _set_sqlite_pragma(dbapi_conn, connection_record):
-    dbapi_conn.execute("PRAGMA journal_mode=WAL")
-    dbapi_conn.execute("PRAGMA busy_timeout=5000")
-    dbapi_conn.execute("PRAGMA synchronous=NORMAL")
+engine_kwargs = {"pool_pre_ping": True}
+if DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_size"] = 5
+    engine_kwargs["max_overflow"] = 10
 
-# With pysqlite isolation_level=None, we need to manage transactions manually
-@event.listens_for(engine, "begin")
-def _do_begin(conn):
-    conn.exec_driver_sql("BEGIN")
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 class Base(DeclarativeBase):

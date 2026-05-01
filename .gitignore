@@ -8,3 +8,4 @@ node_modules/
 screenshots/
 test-app.mjs
 .mcp.json
+backups/

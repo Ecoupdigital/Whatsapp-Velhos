@@ -12,39 +12,8 @@ from services.scheduler import start_scheduler, stop_scheduler
 
 log = logging.getLogger(__name__)
 
-# Create tables
+# Create tables (Postgres handles schema natively, no ALTER TABLE patches needed)
 Base.metadata.create_all(bind=engine)
-
-# Migrate: add missing columns to existing tables
-def _migrate():
-    from sqlalchemy import text, inspect
-    insp = inspect(engine)
-    with engine.connect() as conn:
-        # jogos table - add new columns if missing
-        if "jogos" in insp.get_table_names():
-            existing = {c["name"] for c in insp.get_columns("jogos")}
-            if "realizado" not in existing:
-                conn.execute(text("ALTER TABLE jogos ADD COLUMN realizado INTEGER DEFAULT 0"))
-            if "gols_descricao" not in existing:
-                conn.execute(text("ALTER TABLE jogos ADD COLUMN gols_descricao TEXT"))
-            if "assistencias" not in existing:
-                conn.execute(text("ALTER TABLE jogos ADD COLUMN assistencias TEXT"))
-            if "destaque" not in existing:
-                conn.execute(text("ALTER TABLE jogos ADD COLUMN destaque TEXT"))
-
-        # contas table - create if missing (handled by create_all, but ensure it exists)
-        # transacoes table - add conta_id column if missing
-        if "transacoes" in insp.get_table_names():
-            existing_trans = {c["name"] for c in insp.get_columns("transacoes")}
-            if "conta_id" not in existing_trans:
-                conn.execute(text("ALTER TABLE transacoes ADD COLUMN conta_id INTEGER REFERENCES contas(id)"))
-
-        conn.commit()
-
-try:
-    _migrate()
-except Exception as e:
-    log.warning(f"Migration: {e}")
 
 app = FastAPI(
     title="Velhos Parceiros FC - API",
@@ -120,18 +89,3 @@ def on_shutdown():
 @app.get("/")
 def root():
     return {"app": "Velhos Parceiros FC", "version": "1.0.0", "docs": "/docs"}
-
-
-@app.get("/debug/jogadores-raw")
-def debug_jogadores_raw():
-    """Test endpoint using raw sqlite3 to isolate SQLAlchemy issues."""
-    import sqlite3
-    import os
-    db_path = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "velhos.db"))
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT id, nome FROM jogadores ORDER BY nome")
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-    return rows
