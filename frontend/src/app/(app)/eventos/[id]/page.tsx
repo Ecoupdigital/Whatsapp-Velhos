@@ -281,8 +281,13 @@ export default function EventoDetailPage() {
 
   const handlePopularElenco = async () => {
     if (!evento) return;
-    if (!evento.valor_jogador && !evento.valor_socio) {
-      toast.error("Configure os valores (jogador/socio) antes de popular");
+    const temValorFixo = !!(evento.valor_jogador || evento.valor_socio);
+    const temCartoes = !!(
+      evento.valor_cartao &&
+      (evento.qtd_cartoes_padrao_jogador || evento.qtd_cartoes_padrao_socio)
+    );
+    if (!temValorFixo && !temCartoes) {
+      toast.error("Configure valor jogador/socio OU valor_cartao + qtd padrao antes de popular");
       return;
     }
     try {
