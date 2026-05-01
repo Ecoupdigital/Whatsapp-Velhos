@@ -1055,28 +1055,51 @@ export default function JogadoresPage() {
                 {sugestoes.total_no_grupo} no grupo - {sugestoes.total_cadastrados} cadastrados.
                 Cadastre apenas quem voce quiser que receba mensagens.
               </p>
-              {sugestoes.sem_cadastro.map((s) => (
-                <div
-                  key={s.telefone}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle bg-surface-card"
-                >
-                  <Phone size={14} className="text-txt-tertiary shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-mono text-txt-primary truncate">{s.telefone}</p>
-                    {s.nome && (
-                      <p className="text-xs text-txt-secondary font-body truncate">{s.nome}</p>
-                    )}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<UserPlus size={14} />}
-                    onClick={() => openCreate(s.telefone)}
+              {sugestoes.sem_cadastro.map((s) => {
+                const inicial = (s.nome || "?").charAt(0).toUpperCase();
+                return (
+                  <div
+                    key={s.telefone}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle bg-surface-card"
                   >
-                    Cadastrar
-                  </Button>
-                </div>
-              ))}
+                    {s.foto ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={s.foto}
+                        alt={s.nome || s.telefone}
+                        className="w-10 h-10 rounded-full object-cover bg-surface-tertiary shrink-0"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-surface-tertiary flex items-center justify-center text-sm font-display text-txt-secondary shrink-0">
+                        {inicial}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-txt-primary truncate">
+                        {s.nome || "Sem nome WhatsApp"}
+                      </p>
+                      <p className="text-xs font-mono text-txt-tertiary truncate">
+                        {s.telefone_formatado || s.telefone}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<UserPlus size={14} />}
+                      onClick={() => {
+                        const f = { ...emptyForm, telefone: s.telefone, nome: s.nome || "" };
+                        setEditingId(null);
+                        setForm(f);
+                        setSugestoesOpen(false);
+                        setModalOpen(true);
+                      }}
+                    >
+                      Cadastrar
+                    </Button>
+                  </div>
+                );
+              })}
             </>
           )}
         </ModalBody>

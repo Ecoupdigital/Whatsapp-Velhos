@@ -71,7 +71,12 @@ export interface JogadorOut {
 export interface SugestoesGrupo {
   total_no_grupo: number;
   total_cadastrados: number;
-  sem_cadastro: { telefone: string; nome: string }[];
+  sem_cadastro: {
+    telefone: string;
+    nome: string;
+    foto?: string;
+    telefone_formatado?: string;
+  }[];
 }
 
 // === Mensalidades ===

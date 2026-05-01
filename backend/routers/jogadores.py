@@ -4,7 +4,8 @@ from database import get_db
 from models import Jogador, Configuracao
 from schemas import JogadorCreate, JogadorUpdate, JogadorOut
 from auth import get_current_user
-from services.whatsapp_service import get_group_participants
+import asyncio
+from services.whatsapp_service import get_group_participants, get_chat_details
 from datetime import datetime
 
 router = APIRouter(prefix="/api/jogadores", tags=["jogadores"], dependencies=[Depends(get_current_user)])
@@ -83,14 +84,28 @@ async def sugestoes_grupo(db: Session = Depends(get_db)):
     }
     cadastrados.discard("")
 
-    sem_cadastro = []
+    pendentes = []
     for p in participantes:
         phone_norm = _normalize_phone(p["phone"])
         if phone_norm and phone_norm not in cadastrados:
-            sem_cadastro.append({
-                "telefone": p["phone"],
-                "nome": p["name"],
-            })
+            pendentes.append(p["phone"])
+
+    # Enriquece com nome + foto via /chat/details (paralelo, com timeout protegido)
+    detalhes = await asyncio.gather(
+        *[get_chat_details(ph) for ph in pendentes],
+        return_exceptions=True,
+    )
+
+    sem_cadastro = []
+    for ph, det in zip(pendentes, detalhes):
+        if isinstance(det, Exception) or not det:
+            det = {}
+        sem_cadastro.append({
+            "telefone": ph,
+            "nome": det.get("name", "") if isinstance(det, dict) else "",
+            "foto": det.get("image", "") if isinstance(det, dict) else "",
+            "telefone_formatado": det.get("phone_formatted", "") if isinstance(det, dict) else "",
+        })
 
     return {
         "total_no_grupo": len(participantes),

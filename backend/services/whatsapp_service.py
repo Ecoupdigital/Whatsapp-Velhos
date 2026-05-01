@@ -65,9 +65,32 @@ async def get_group_participants(group_jid: str) -> list[dict]:
                 if phone:
                     result.append({
                         "phone": phone,
-                        "name": p.get("PushName") or p.get("FullName") or "",
+                        "name": p.get("DisplayName") or "",
                     })
             return result
         except Exception as e:
             log.error(f"Erro ao buscar participantes do grupo: {e}")
             return []
+
+
+async def get_chat_details(phone: str) -> dict:
+    """Busca nome WhatsApp + foto de um numero via /chat/details."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{API_URL}/chat/details",
+                headers={"token": TOKEN, "Content-Type": "application/json"},
+                json={"number": phone, "preview": True},
+                timeout=10,
+            )
+            data = resp.json()
+            if not isinstance(data, dict):
+                return {}
+            return {
+                "name": data.get("name") or data.get("wa_name") or data.get("wa_contactName") or "",
+                "image": data.get("imagePreview") or data.get("image") or "",
+                "phone_formatted": data.get("phone") or "",
+            }
+        except Exception as e:
+            log.warning(f"Erro ao buscar detalhes de {phone}: {e}")
+            return {}
