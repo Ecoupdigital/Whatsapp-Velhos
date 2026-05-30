@@ -1,14 +1,17 @@
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from database import engine, Base, SessionLocal
 from models import Usuario, Conta
 from auth import hash_password
 
-from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes, contas
+from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes, contas, campanhas
 from routers.configuracoes import seed_defaults as seed_default_configs
 from services.scheduler import start_scheduler, stop_scheduler
+from services.campanha_service import UPLOAD_DIR
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +45,11 @@ app.include_router(whatsapp.router)
 app.include_router(dashboard.router)
 app.include_router(contas.router)
 app.include_router(configuracoes.router)
+app.include_router(campanhas.router)
+
+# Arquivos de midia das campanhas (servidos publicamente p/ a uazapi buscar)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 @app.on_event("startup")

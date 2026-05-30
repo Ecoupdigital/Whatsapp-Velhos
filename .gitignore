@@ -9,3 +9,5 @@ screenshots/
 test-app.mjs
 .mcp.json
 backups/
+backend/uploads/
+uploads/

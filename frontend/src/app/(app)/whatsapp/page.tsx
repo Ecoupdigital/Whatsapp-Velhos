@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   MessageSquare,
-  Send,
   Wifi,
   WifiOff,
   Eye,
@@ -13,16 +12,13 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Megaphone,
+  History,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import type {
-  MensagemLogOut,
-  WhatsAppStatus,
-  JogadorOut,
-  EnviarMensagemRequest,
-} from "@/types";
+import type { MensagemLogOut, WhatsAppStatus } from "@/types";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -30,6 +26,7 @@ import { Select } from "@/components/ui/Select";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import { Skeleton, SkeletonTableRow } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { CampanhasPanel } from "@/components/campanhas/CampanhasPanel";
 
 /* ─── Type badge ─────────────────────────────────────────── */
 
@@ -37,6 +34,8 @@ const TIPO_COLORS: Record<string, { bg: string; text: string; label: string }> =
   lembrete_dia6: { bg: "bg-blue-500/15", text: "text-blue-400", label: "Lembrete (Dia 6)" },
   aviso_dia14: { bg: "bg-yellow-500/15", text: "text-yellow-400", label: "Aviso (Dia 14)" },
   cobranca_dia20: { bg: "bg-red-500/15", text: "text-red-400", label: "Cobranca (Dia 20)" },
+  cobranca_manual: { bg: "bg-orange-500/15", text: "text-orange-400", label: "Cobranca Manual" },
+  campanha: { bg: "bg-brand-red/15", text: "text-brand-red", label: "Campanha" },
   manual: { bg: "bg-surface-tertiary", text: "text-txt-secondary", label: "Manual" },
   promocao: { bg: "bg-purple-500/15", text: "text-purple-400", label: "Promocao" },
 };
@@ -131,9 +130,11 @@ function StatCard({
 
 const TIPO_FILTER_OPTIONS = [
   { value: "", label: "Todos os tipos" },
+  { value: "campanha", label: "Campanha" },
   { value: "lembrete_dia6", label: "Lembrete (Dia 6)" },
   { value: "aviso_dia14", label: "Aviso (Dia 14)" },
   { value: "cobranca_dia20", label: "Cobranca (Dia 20)" },
+  { value: "cobranca_manual", label: "Cobranca Manual" },
   { value: "manual", label: "Manual" },
   { value: "promocao", label: "Promocao" },
 ];
@@ -144,24 +145,20 @@ const STATUS_FILTER_OPTIONS = [
   { value: "erro", label: "Erro" },
 ];
 
+type Tab = "campanhas" | "historico";
+
 export default function WhatsAppPage() {
   const [whatsStatus, setWhatsStatus] = useState<WhatsAppStatus | null>(null);
   const [logs, setLogs] = useState<MensagemLogOut[]>([]);
-  const [jogadores, setJogadores] = useState<JogadorOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<Tab>("campanhas");
 
   /* filters */
   const [filterTipo, setFilterTipo] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDateStart, setFilterDateStart] = useState("");
   const [filterDateEnd, setFilterDateEnd] = useState("");
-
-  /* send modal */
-  const [sendModalOpen, setSendModalOpen] = useState(false);
-  const [selectedJogadores, setSelectedJogadores] = useState<number[]>([]);
-  const [msgText, setMsgText] = useState("");
-  const [sending, setSending] = useState(false);
 
   /* view content modal */
   const [viewMsg, setViewMsg] = useState<MensagemLogOut | null>(null);
@@ -170,14 +167,12 @@ export default function WhatsAppPage() {
   const fetchData = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [status, mensagens, jogs] = await Promise.all([
+      const [status, mensagens] = await Promise.all([
         api.get<WhatsAppStatus>("/whatsapp/status"),
         api.get<MensagemLogOut[]>("/mensagens/log"),
-        api.get<JogadorOut[]>("/jogadores?ativo=1"),
       ]);
       setWhatsStatus(status);
       setLogs(mensagens);
-      setJogadores(jogs);
     } catch {
       toast.error("Erro ao carregar dados");
     } finally {
@@ -212,51 +207,6 @@ export default function WhatsAppPage() {
     (l) => l.enviado_em && new Date(l.enviado_em) >= twentyFourAgo
   ).length;
 
-  /* ── send message ────────────────────────────────────────── */
-  const handleSend = async () => {
-    if (selectedJogadores.length === 0) {
-      toast.error("Selecione ao menos um jogador");
-      return;
-    }
-    if (!msgText.trim()) {
-      toast.error("Digite a mensagem");
-      return;
-    }
-    setSending(true);
-    try {
-      const body: EnviarMensagemRequest = {
-        jogador_ids: selectedJogadores,
-        texto: msgText,
-      };
-      await api.post("/mensagens/enviar", body);
-      toast.success("Mensagem enviada com sucesso");
-      setSendModalOpen(false);
-      setSelectedJogadores([]);
-      setMsgText("");
-      fetchData(true);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erro ao enviar";
-      toast.error(msg);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  /* ── toggle jogador selection ────────────────────────────── */
-  const toggleJogador = (id: number) => {
-    setSelectedJogadores((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const toggleAll = () => {
-    if (selectedJogadores.length === jogadores.length) {
-      setSelectedJogadores([]);
-    } else {
-      setSelectedJogadores(jogadores.map((j) => j.id));
-    }
-  };
-
   /* ── render ──────────────────────────────────────────────── */
   return (
     <motion.div
@@ -272,23 +222,8 @@ export default function WhatsAppPage() {
             WhatsApp
           </h1>
           <p className="text-sm text-txt-tertiary font-body mt-1">
-            Status de conexao e historico de mensagens
+            Campanhas em massa, status de conexao e historico de mensagens
           </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-          <Button
-            variant="secondary"
-            icon={<RefreshCw className={refreshing ? "animate-spin" : ""} />}
-            onClick={() => fetchData(true)}
-            loading={refreshing}
-            size="sm"
-            className="w-full sm:w-auto justify-center"
-          >
-            Atualizar
-          </Button>
-          <Button icon={<Send />} onClick={() => setSendModalOpen(true)} className="w-full sm:w-auto justify-center">
-            Enviar Mensagem
-          </Button>
         </div>
       </div>
 
@@ -309,9 +244,7 @@ export default function WhatsAppPage() {
               <div
                 className={cn(
                   "h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                  whatsStatus?.connected
-                    ? "bg-emerald-500/15"
-                    : "bg-red-500/15"
+                  whatsStatus?.connected ? "bg-emerald-500/15" : "bg-red-500/15"
                 )}
               >
                 {whatsStatus?.connected ? (
@@ -365,186 +298,232 @@ export default function WhatsAppPage() {
         />
       </div>
 
-      {/* Filters */}
-      <Card padding="sm">
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
-          <div className="flex items-center gap-1.5 text-txt-tertiary mr-1">
-            <Filter className="h-4 w-4" />
-            <span className="text-xs font-body uppercase tracking-wider">
-              Filtros
-            </span>
-          </div>
-          <div className="grid grid-cols-2 sm:flex gap-3 w-full sm:w-auto">
-            <Select
-              options={TIPO_FILTER_OPTIONS}
-              value={filterTipo}
-              onChange={(e) => setFilterTipo(e.target.value)}
-              containerClassName="w-full sm:min-w-[160px]"
-            />
-            <Select
-              options={STATUS_FILTER_OPTIONS}
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              containerClassName="w-full sm:min-w-[140px]"
-            />
-          </div>
-          <div className="grid grid-cols-2 sm:flex gap-3 w-full sm:w-auto">
-            <Input
-              type="date"
-              value={filterDateStart}
-              onChange={(e) => setFilterDateStart(e.target.value)}
-              containerClassName="w-full sm:min-w-[140px]"
-              placeholder="Data inicio"
-            />
-            <Input
-              type="date"
-              value={filterDateEnd}
-              onChange={(e) => setFilterDateEnd(e.target.value)}
-              containerClassName="w-full sm:min-w-[140px]"
-              placeholder="Data fim"
-            />
-          </div>
-          {(filterTipo || filterStatus || filterDateStart || filterDateEnd) && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setFilterTipo("");
-                setFilterStatus("");
-                setFilterDateStart("");
-                setFilterDateEnd("");
-              }}
-              className="w-full sm:w-auto justify-center"
-            >
-              Limpar
-            </Button>
-          )}
-        </div>
-      </Card>
-
-      {/* Desktop Log table */}
-      <Card padding="none" className="overflow-hidden hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border-subtle bg-surface-secondary/50">
-                {["Data/Hora", "Destinatario", "Tipo", "Status", "Acoes"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-xs font-semibold text-txt-tertiary uppercase tracking-wider font-body"
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-subtle">
-              {loading ? (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i}>
-                    <td colSpan={5} className="p-0">
-                      <SkeletonTableRow columns={5} />
-                    </td>
-                  </tr>
-                ))
-              ) : filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <EmptyState
-                      icon={<MessageSquare />}
-                      title="Nenhuma mensagem encontrada"
-                      description="Ajuste os filtros ou envie uma nova mensagem"
-                    />
-                  </td>
-                </tr>
-              ) : (
-                filteredLogs.map((l) => (
-                  <tr
-                    key={l.id}
-                    className="hover:bg-surface-secondary/30 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-txt-secondary text-xs">
-                      {formatDateTime(l.enviado_em)}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-txt-primary text-xs">
-                      {l.telefone ?? "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <TipoMsgBadge tipo={l.tipo_mensagem} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusMsgBadge status={l.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button
-                        variant="icon"
-                        size="sm"
-                        icon={<Eye />}
-                        onClick={() => setViewMsg(l)}
-                        aria-label="Ver conteudo"
-                      />
-                    </td>
-                  </tr>
-                ))
+      {/* Tabs */}
+      <div className="flex items-center gap-1 p-1 rounded-lg bg-surface-tertiary border border-border-subtle w-full sm:w-fit">
+        {[
+          { id: "campanhas" as Tab, label: "Campanhas", icon: Megaphone },
+          { id: "historico" as Tab, label: "Historico", icon: History },
+        ].map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-body font-medium transition-colors",
+                active
+                  ? "bg-brand-red text-white"
+                  : "text-txt-secondary hover:text-txt-primary"
               )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Mobile Log cards */}
-      <div className="md:hidden space-y-3">
-        {loading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} padding="md">
-              <Skeleton className="h-4 w-32 mb-3" />
-              <Skeleton className="h-3 w-full mb-2" />
-              <Skeleton className="h-3 w-3/4" />
-            </Card>
-          ))
-        ) : filteredLogs.length === 0 ? (
-          <Card padding="md">
-            <EmptyState
-              icon={<MessageSquare />}
-              title="Nenhuma mensagem encontrada"
-              description="Ajuste os filtros ou envie uma nova mensagem"
-            />
-          </Card>
-        ) : (
-          filteredLogs.map((l) => (
-            <Card
-              key={l.id}
-              padding="md"
-              className="space-y-2 cursor-pointer hover:bg-surface-card-hover transition-colors"
-              onClick={() => setViewMsg(l)}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-txt-secondary font-body">
-                  {formatDateTime(l.enviado_em)}
-                </span>
-                <StatusMsgBadge status={l.status} />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-mono text-txt-primary truncate">
-                  {l.telefone ?? "-"}
-                </span>
-                <TipoMsgBadge tipo={l.tipo_mensagem} />
-              </div>
-              <div className="flex items-center justify-end pt-1">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setViewMsg(l); }}
-                  className="text-xs text-brand-red hover:text-brand-red-hover font-body flex items-center gap-1 transition-colors"
-                >
-                  <Eye className="h-3 w-3" />
-                  Ver conteudo
-                </button>
-              </div>
-            </Card>
-          ))
-        )}
+              <Icon className="h-4 w-4" />
+              {t.label}
+            </button>
+          );
+        })}
       </div>
+
+      {/* ── CAMPANHAS TAB ── */}
+      {tab === "campanhas" && <CampanhasPanel />}
+
+      {/* ── HISTORICO TAB ── */}
+      {tab === "historico" && (
+        <div className="space-y-4">
+          {/* Filters */}
+          <Card padding="sm">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+              <div className="flex items-center gap-1.5 text-txt-tertiary mr-1">
+                <Filter className="h-4 w-4" />
+                <span className="text-xs font-body uppercase tracking-wider">
+                  Filtros
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:flex gap-3 w-full sm:w-auto">
+                <Select
+                  options={TIPO_FILTER_OPTIONS}
+                  value={filterTipo}
+                  onChange={(e) => setFilterTipo(e.target.value)}
+                  containerClassName="w-full sm:min-w-[160px]"
+                />
+                <Select
+                  options={STATUS_FILTER_OPTIONS}
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  containerClassName="w-full sm:min-w-[140px]"
+                />
+              </div>
+              <div className="grid grid-cols-2 sm:flex gap-3 w-full sm:w-auto">
+                <Input
+                  type="date"
+                  value={filterDateStart}
+                  onChange={(e) => setFilterDateStart(e.target.value)}
+                  containerClassName="w-full sm:min-w-[140px]"
+                  placeholder="Data inicio"
+                />
+                <Input
+                  type="date"
+                  value={filterDateEnd}
+                  onChange={(e) => setFilterDateEnd(e.target.value)}
+                  containerClassName="w-full sm:min-w-[140px]"
+                  placeholder="Data fim"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                {(filterTipo || filterStatus || filterDateStart || filterDateEnd) && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setFilterTipo("");
+                      setFilterStatus("");
+                      setFilterDateStart("");
+                      setFilterDateEnd("");
+                    }}
+                    className="w-full sm:w-auto justify-center"
+                  >
+                    Limpar
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  icon={<RefreshCw className={refreshing ? "animate-spin" : ""} />}
+                  onClick={() => fetchData(true)}
+                  loading={refreshing}
+                  size="sm"
+                  className="w-full sm:w-auto justify-center"
+                >
+                  Atualizar
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Desktop Log table */}
+          <Card padding="none" className="overflow-hidden hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border-subtle bg-surface-secondary/50">
+                    {["Data/Hora", "Destinatario", "Tipo", "Status", "Acoes"].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-3 text-left text-xs font-semibold text-txt-tertiary uppercase tracking-wider font-body"
+                        >
+                          {h}
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  {loading ? (
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i}>
+                        <td colSpan={5} className="p-0">
+                          <SkeletonTableRow columns={5} />
+                        </td>
+                      </tr>
+                    ))
+                  ) : filteredLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5}>
+                        <EmptyState
+                          icon={<MessageSquare />}
+                          title="Nenhuma mensagem encontrada"
+                          description="Ajuste os filtros ou crie uma campanha"
+                        />
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredLogs.map((l) => (
+                      <tr
+                        key={l.id}
+                        className="hover:bg-surface-secondary/30 transition-colors"
+                      >
+                        <td className="px-4 py-3 text-txt-secondary text-xs">
+                          {formatDateTime(l.enviado_em)}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-txt-primary text-xs">
+                          {l.telefone ?? "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <TipoMsgBadge tipo={l.tipo_mensagem} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusMsgBadge status={l.status} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            variant="icon"
+                            size="sm"
+                            icon={<Eye />}
+                            onClick={() => setViewMsg(l)}
+                            aria-label="Ver conteudo"
+                          />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Mobile Log cards */}
+          <div className="md:hidden space-y-3">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <Card key={i} padding="md">
+                  <Skeleton className="h-4 w-32 mb-3" />
+                  <Skeleton className="h-3 w-full mb-2" />
+                  <Skeleton className="h-3 w-3/4" />
+                </Card>
+              ))
+            ) : filteredLogs.length === 0 ? (
+              <Card padding="md">
+                <EmptyState
+                  icon={<MessageSquare />}
+                  title="Nenhuma mensagem encontrada"
+                  description="Ajuste os filtros ou crie uma campanha"
+                />
+              </Card>
+            ) : (
+              filteredLogs.map((l) => (
+                <Card
+                  key={l.id}
+                  padding="md"
+                  className="space-y-2 cursor-pointer hover:bg-surface-card-hover transition-colors"
+                  onClick={() => setViewMsg(l)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-txt-secondary font-body">
+                      {formatDateTime(l.enviado_em)}
+                    </span>
+                    <StatusMsgBadge status={l.status} />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-mono text-txt-primary truncate">
+                      {l.telefone ?? "-"}
+                    </span>
+                    <TipoMsgBadge tipo={l.tipo_mensagem} />
+                  </div>
+                  <div className="flex items-center justify-end pt-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setViewMsg(l); }}
+                      className="text-xs text-brand-red hover:text-brand-red-hover font-body flex items-center gap-1 transition-colors"
+                    >
+                      <Eye className="h-3 w-3" />
+                      Ver conteudo
+                    </button>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── View content modal ─────────────────────────────── */}
       <Modal open={!!viewMsg} onClose={() => setViewMsg(null)} size="md">
@@ -604,104 +583,6 @@ export default function WhatsAppPage() {
         <ModalFooter>
           <Button variant="secondary" onClick={() => setViewMsg(null)}>
             Fechar
-          </Button>
-        </ModalFooter>
-      </Modal>
-
-      {/* ── Send manual message modal ──────────────────────── */}
-      <Modal
-        open={sendModalOpen}
-        onClose={() => setSendModalOpen(false)}
-        size="lg"
-      >
-        <ModalHeader>Enviar Mensagem Manual</ModalHeader>
-        <ModalBody className="space-y-4">
-          {/* jogador multi-select */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-txt-secondary font-body">
-                Jogadores ({selectedJogadores.length} selecionados)
-              </label>
-              <button
-                type="button"
-                onClick={toggleAll}
-                className="text-xs text-brand-red hover:text-brand-red-hover transition-colors font-body"
-              >
-                {selectedJogadores.length === jogadores.length
-                  ? "Desmarcar todos"
-                  : "Selecionar todos"}
-              </button>
-            </div>
-            <div
-              className={cn(
-                "max-h-48 overflow-y-auto rounded-lg",
-                "bg-surface-tertiary border border-border",
-                "divide-y divide-border-subtle"
-              )}
-            >
-              {jogadores.map((j) => {
-                const checked = selectedJogadores.includes(j.id);
-                return (
-                  <label
-                    key={j.id}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 cursor-pointer",
-                      "hover:bg-surface-secondary/50 transition-colors",
-                      checked && "bg-brand-red/5"
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleJogador(j.id)}
-                      className="h-4 w-4 rounded border-border bg-surface-tertiary text-brand-red focus:ring-brand-red/50"
-                    />
-                    <span className="text-sm text-txt-primary font-body">
-                      {j.apelido || j.nome}
-                    </span>
-                    {j.telefone && (
-                      <span className="text-xs text-txt-tertiary font-mono ml-auto">
-                        {j.telefone}
-                      </span>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* message textarea */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-txt-secondary font-body">
-              Mensagem
-            </label>
-            <textarea
-              value={msgText}
-              onChange={(e) => setMsgText(e.target.value)}
-              placeholder="Digite a mensagem..."
-              rows={5}
-              className={cn(
-                "w-full rounded-lg px-3 py-2",
-                "bg-surface-tertiary border border-border",
-                "text-txt-primary text-sm font-body",
-                "placeholder:text-txt-tertiary",
-                "focus:outline-none focus:ring-2 focus:ring-brand-red/50 focus:border-brand-red",
-                "hover:border-border-strong transition-all duration-200",
-                "resize-none"
-              )}
-            />
-          </div>
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => setSendModalOpen(false)}>
-            Cancelar
-          </Button>
-          <Button
-            icon={<Send />}
-            onClick={handleSend}
-            loading={sending}
-          >
-            Enviar
           </Button>
         </ModalFooter>
       </Modal>

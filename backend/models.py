@@ -215,3 +215,60 @@ class Configuracao(Base):
 
     chave = Column(Text, primary_key=True)
     valor = Column(Text)
+
+
+class Segmento(Base):
+    """Publico salvo (conjunto de filtros reutilizavel) pra campanhas."""
+    __tablename__ = "segmentos"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(Text, nullable=False)
+    filtros_json = Column(Text)  # JSON com os filtros de publico
+    created_at = Column(Text, default=lambda: datetime.now().isoformat())
+
+
+class Campanha(Base):
+    __tablename__ = "campanhas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(Text, nullable=False)
+    tipo_conteudo = Column(Text, nullable=False, default="texto")  # texto | imagem | video | audio | documento
+    texto = Column(Text)  # mensagem ou legenda (suporta placeholders)
+    midia_url = Column(Text)  # URL publica do arquivo enviado
+    midia_nome = Column(Text)  # nome original do arquivo (docName)
+    modo = Column(Text, nullable=False, default="agora")  # agora | agendar | recorrente
+    status = Column(Text, nullable=False, default="rascunho")  # rascunho | agendada | enviando | concluida | cancelada | falha
+    agendada_para = Column(Text)  # ISO datetime BRT (modo agendar)
+    recorrencia = Column(Text)  # diaria | semanal | mensal (modo recorrente)
+    recorrencia_dia = Column(Integer)  # semanal: 0-6 (seg=0) | mensal: 1-31
+    recorrencia_hora = Column(Text)  # "HH:MM"
+    filtros_json = Column(Text)  # snapshot dos filtros de publico
+    segmento_id = Column(Integer, ForeignKey("segmentos.id", ondelete="SET NULL"))
+    total = Column(Integer, default=0)
+    enviados = Column(Integer, default=0)
+    erros = Column(Integer, default=0)
+    ultima_execucao = Column(Text)
+    created_at = Column(Text, default=lambda: datetime.now().isoformat())
+    updated_at = Column(Text, default=lambda: datetime.now().isoformat(), onupdate=lambda: datetime.now().isoformat())
+
+    destinatarios = relationship(
+        "CampanhaDestinatario",
+        back_populates="campanha",
+        cascade="all, delete-orphan",
+    )
+
+
+class CampanhaDestinatario(Base):
+    __tablename__ = "campanha_destinatarios"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    campanha_id = Column(Integer, ForeignKey("campanhas.id", ondelete="CASCADE"), nullable=False)
+    jogador_id = Column(Integer, ForeignKey("jogadores.id", ondelete="SET NULL"))
+    nome = Column(Text)  # snapshot pra exibir mesmo se jogador sumir
+    telefone = Column(Text)
+    status = Column(Text, default="pendente")  # pendente | enviado | erro
+    message_id = Column(Text)
+    erro_detalhe = Column(Text)
+    enviado_em = Column(Text)
+
+    campanha = relationship("Campanha", back_populates="destinatarios")

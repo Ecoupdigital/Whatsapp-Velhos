@@ -5,9 +5,10 @@ from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from database import SessionLocal
-from models import Mensalidade, Jogador, Configuracao, MensagemLog
+from models import Mensalidade, Jogador, Configuracao, MensagemLog, Campanha
 from services.template_service import render_template, mes_por_extenso
 from services.whatsapp_service import send_text_message
 
@@ -194,6 +195,46 @@ async def job_cobranca_dia20():
         db.close()
 
 
+async def job_campanhas_tick():
+    """Roda a cada 1 min: dispara campanhas agendadas (uma vez) e recorrentes que venceram."""
+    from services.campanha_service import (
+        deve_executar_agendada,
+        deve_executar_recorrente,
+        disparar,
+        _now_brt,
+    )
+
+    db = SessionLocal()
+    due: list[int] = []
+    try:
+        now = _now_brt()
+        agendadas = db.query(Campanha).filter(Campanha.status == "agendada").all()
+        vencidas = [
+            c
+            for c in agendadas
+            if deve_executar_agendada(c, now) or deve_executar_recorrente(c, now)
+        ]
+        # Marca 'enviando' e carimba ultima_execucao ANTES de disparar.
+        # Fecha a janela de dupla-execucao: o proximo tick (filtra status='agendada')
+        # nao seleciona de novo, e o guarda de recorrencia (ultima_execucao) ja vale.
+        for c in vencidas:
+            c.status = "enviando"
+            c.ultima_execucao = now.isoformat()
+            due.append(c.id)
+        if vencidas:
+            db.commit()
+    except Exception:
+        log.exception("[campanhas_tick] erro ao selecionar campanhas")
+        db.rollback()
+        due = []
+    finally:
+        db.close()
+
+    for cid in due:
+        log.info(f"[campanhas_tick] disparando campanha {cid}")
+        disparar(cid)
+
+
 def _parse_hora(hora_str: str) -> tuple[int, int]:
     """Converte string 'HH:MM' em tupla (hora, minuto)."""
     try:
@@ -250,8 +291,19 @@ def start_scheduler(app=None):
         replace_existing=True,
     )
 
+    # Tick de campanhas: a cada 1 min checa agendadas/recorrentes
+    _scheduler.add_job(
+        job_campanhas_tick,
+        IntervalTrigger(minutes=1, timezone="America/Sao_Paulo"),
+        id="campanhas_tick",
+        name="Tick de campanhas",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
     _scheduler.start()
-    log.info("Scheduler iniciado com 3 jobs configurados.")
+    log.info("Scheduler iniciado com 3 jobs de mensalidade + tick de campanhas.")
 
 
 def stop_scheduler():

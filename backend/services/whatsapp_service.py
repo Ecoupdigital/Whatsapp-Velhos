@@ -47,6 +47,45 @@ async def send_text_message(number: str, text: str) -> dict:
             return {"success": False, "message_id": "", "error": str(e)}
 
 
+async def send_media_message(
+    number: str,
+    media_type: str,
+    file: str,
+    caption: str = "",
+    doc_name: str | None = None,
+) -> dict:
+    """Envia midia via /send/media.
+
+    media_type: image | video | audio | document (tipos uazapi).
+    file: URL publica ou base64.
+    caption: legenda (texto junto).
+    doc_name: nome do arquivo (usado quando media_type=document).
+    """
+    payload: dict = {"number": number, "type": media_type, "file": file}
+    if caption:
+        payload["text"] = caption
+    if doc_name:
+        payload["docName"] = doc_name
+
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{API_URL}/send/media",
+                headers={"token": TOKEN, "Content-Type": "application/json"},
+                json=payload,
+                timeout=120,
+            )
+            data = resp.json()
+            return {
+                "success": not data.get("error"),
+                "message_id": data.get("messageid", ""),
+                "error": data.get("error", ""),
+            }
+        except Exception as e:
+            log.error(f"Erro ao enviar midia para {number}: {e}")
+            return {"success": False, "message_id": "", "error": str(e)}
+
+
 async def get_group_participants(group_jid: str) -> list[dict]:
     """Retorna lista de participantes do grupo. Cada item: {phone, name}."""
     async with httpx.AsyncClient() as client:

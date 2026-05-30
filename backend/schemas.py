@@ -510,6 +510,120 @@ class WhatsAppStatus(BaseModel):
     phone_number: Optional[str]
 
 
+# === Campanhas ===
+
+class PublicoFiltros(BaseModel):
+    ativo: Optional[bool] = True
+    tipo: Optional[str] = None  # jogador | socio
+    posicao: Optional[str] = None
+    mensalidade_status: Optional[str] = None  # pendente | pago | atrasado | isento
+    mes_referencia: Optional[str] = None  # "2026-05" (default: mes atual)
+    evento_id: Optional[int] = None
+    evento_status: Optional[str] = None  # confirmado | recusado | pendente | talvez
+    incluir_sem_telefone: bool = False
+
+
+class PreviewPublicoRequest(BaseModel):
+    filtros: PublicoFiltros = PublicoFiltros()
+
+
+class PublicoJogador(BaseModel):
+    jogador_id: int
+    nome: str
+    apelido: Optional[str] = None
+    telefone: Optional[str] = None
+    tipo: str
+    posicao: Optional[str] = None
+    enviavel: bool
+    motivo: Optional[str] = None
+
+
+class SegmentoCreate(BaseModel):
+    nome: str
+    filtros: PublicoFiltros = PublicoFiltros()
+
+
+class SegmentoOut(BaseModel):
+    id: int
+    nome: str
+    filtros: Optional[dict] = None
+    created_at: Optional[str] = None
+
+
+class CampanhaCreate(BaseModel):
+    nome: str
+    tipo_conteudo: str = "texto"  # texto | imagem | video | audio | documento
+    texto: Optional[str] = None
+    midia_url: Optional[str] = None
+    midia_nome: Optional[str] = None
+    modo: str = "agora"  # agora | agendar | recorrente
+    agendada_para: Optional[str] = None  # ISO datetime BRT
+    recorrencia: Optional[str] = None  # diaria | semanal | mensal
+    recorrencia_dia: Optional[int] = None
+    recorrencia_hora: Optional[str] = None  # "HH:MM"
+    jogador_ids: list[int] = []  # publico materializado (agora/agendar)
+    filtros: Optional[PublicoFiltros] = None  # definicao de publico (recorrente)
+    segmento_id: Optional[int] = None
+    enviar_agora: bool = True  # se modo=agora, dispara na hora
+
+
+class CampanhaUpdate(BaseModel):
+    nome: Optional[str] = None
+    tipo_conteudo: Optional[str] = None
+    texto: Optional[str] = None
+    midia_url: Optional[str] = None
+    midia_nome: Optional[str] = None
+    modo: Optional[str] = None
+    agendada_para: Optional[str] = None
+    recorrencia: Optional[str] = None
+    recorrencia_dia: Optional[int] = None
+    recorrencia_hora: Optional[str] = None
+
+
+class CampanhaOut(BaseModel):
+    id: int
+    nome: str
+    tipo_conteudo: str
+    texto: Optional[str]
+    midia_url: Optional[str]
+    midia_nome: Optional[str]
+    modo: str
+    status: str
+    agendada_para: Optional[str]
+    recorrencia: Optional[str]
+    recorrencia_dia: Optional[int]
+    recorrencia_hora: Optional[str]
+    segmento_id: Optional[int] = None
+    total: int
+    enviados: int
+    erros: int
+    ultima_execucao: Optional[str]
+    created_at: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class CampanhaDestinatarioOut(BaseModel):
+    id: int
+    jogador_id: Optional[int]
+    nome: Optional[str]
+    telefone: Optional[str]
+    status: str
+    message_id: Optional[str]
+    erro_detalhe: Optional[str]
+    enviado_em: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class UploadResponse(BaseModel):
+    url: str
+    nome: str
+    tipo: str  # imagem | video | audio | documento
+
+
 # === Dashboard ===
 
 class DashboardData(BaseModel):

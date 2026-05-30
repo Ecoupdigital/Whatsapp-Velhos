@@ -479,6 +479,114 @@ export interface WhatsAppStatus {
   phone_number: string | null;
 }
 
+// === Campanhas ===
+
+export interface PublicoFiltros {
+  ativo?: boolean | null;
+  tipo?: string | null;
+  posicao?: string | null;
+  mensalidade_status?: string | null;
+  mes_referencia?: string | null;
+  evento_id?: number | null;
+  evento_status?: string | null;
+  incluir_sem_telefone?: boolean;
+}
+
+export interface PublicoJogador {
+  jogador_id: number;
+  nome: string;
+  apelido: string | null;
+  telefone: string | null;
+  tipo: string;
+  posicao: string | null;
+  enviavel: boolean;
+  motivo: string | null;
+}
+
+export interface SegmentoOut {
+  id: number;
+  nome: string;
+  filtros: PublicoFiltros | null;
+  created_at: string | null;
+}
+
+export interface SegmentoCreate {
+  nome: string;
+  filtros: PublicoFiltros;
+}
+
+export type CampanhaTipoConteudo =
+  | "texto"
+  | "imagem"
+  | "video"
+  | "audio"
+  | "documento";
+
+export type CampanhaModo = "agora" | "agendar" | "recorrente";
+
+export type CampanhaStatus =
+  | "rascunho"
+  | "agendada"
+  | "enviando"
+  | "concluida"
+  | "cancelada"
+  | "falha";
+
+export interface CampanhaCreate {
+  nome: string;
+  tipo_conteudo: CampanhaTipoConteudo;
+  texto?: string | null;
+  midia_url?: string | null;
+  midia_nome?: string | null;
+  modo: CampanhaModo;
+  agendada_para?: string | null;
+  recorrencia?: string | null;
+  recorrencia_dia?: number | null;
+  recorrencia_hora?: string | null;
+  jogador_ids?: number[];
+  filtros?: PublicoFiltros | null;
+  segmento_id?: number | null;
+  enviar_agora?: boolean;
+}
+
+export interface CampanhaOut {
+  id: number;
+  nome: string;
+  tipo_conteudo: CampanhaTipoConteudo;
+  texto: string | null;
+  midia_url: string | null;
+  midia_nome: string | null;
+  modo: CampanhaModo;
+  status: CampanhaStatus;
+  agendada_para: string | null;
+  recorrencia: string | null;
+  recorrencia_dia: number | null;
+  recorrencia_hora: string | null;
+  segmento_id: number | null;
+  total: number;
+  enviados: number;
+  erros: number;
+  ultima_execucao: string | null;
+  created_at: string | null;
+}
+
+export interface CampanhaDestinatarioOut {
+  id: number;
+  jogador_id: number | null;
+  nome: string | null;
+  telefone: string | null;
+  status: string;
+  message_id: string | null;
+  erro_detalhe: string | null;
+  enviado_em: string | null;
+}
+
+export interface UploadResponse {
+  url: string;
+  nome: string;
+  tipo: CampanhaTipoConteudo;
+}
+
 // === Dashboard ===
 
 export interface DashboardData {

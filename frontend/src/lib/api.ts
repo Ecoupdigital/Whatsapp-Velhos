@@ -39,6 +39,38 @@ export async function apiFetch<T>(
   return res.json();
 }
 
+export async function apiUpload<T>(
+  endpoint: string,
+  formData: FormData
+): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    method: "POST",
+    body: formData,
+    headers,
+  });
+
+  if (res.status === 401) {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    }
+    throw new Error("Nao autorizado");
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Erro ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export const api = {
   get: <T>(endpoint: string) => apiFetch<T>(endpoint),
   post: <T>(endpoint: string, body: unknown) =>
@@ -47,4 +79,6 @@ export const api = {
     apiFetch<T>(endpoint, { method: "PUT", body: JSON.stringify(body) }),
   delete: <T>(endpoint: string) =>
     apiFetch<T>(endpoint, { method: "DELETE" }),
+  upload: <T>(endpoint: string, formData: FormData) =>
+    apiUpload<T>(endpoint, formData),
 };
