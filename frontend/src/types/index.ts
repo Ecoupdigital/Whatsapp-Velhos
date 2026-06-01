@@ -198,6 +198,7 @@ export interface EventoCreate {
   custo_cartao?: number;
   qtd_cartoes_padrao_jogador?: number;
   qtd_cartoes_padrao_socio?: number;
+  tipos_item?: string[] | null;
 }
 
 export interface EventoUpdate {
@@ -217,6 +218,7 @@ export interface EventoUpdate {
   custo_cartao?: number | null;
   qtd_cartoes_padrao_jogador?: number | null;
   qtd_cartoes_padrao_socio?: number | null;
+  tipos_item?: string[] | null;
 }
 
 export interface EventoOut {
@@ -238,6 +240,7 @@ export interface EventoOut {
   qtd_cartoes_padrao_jogador: number;
   qtd_cartoes_padrao_socio: number;
   created_at: string | null;
+  tipos_item: string[] | null;
 }
 
 export interface ParticipanteUpdate {
@@ -269,6 +272,8 @@ export interface ParticipanteOut {
   qtd_pagou_custo: number;
   observacoes: string | null;
   jogador: JogadorOut | null;
+  faixas: FaixaOut[];
+  itens: ItemOut[];
 }
 
 export interface CartoesUpdate {
@@ -278,6 +283,57 @@ export interface CartoesUpdate {
   qtd_vendidos?: number | null;
   qtd_devolvidos?: number | null;
   qtd_pagou_custo?: number | null;
+}
+
+// --- Faixas de cartao (Galeto) ---
+
+export interface FaixaOut {
+  id: number;
+  evento_participante_id: number;
+  numero_inicio: number | null;
+  numero_fim: number | null;
+  quantidade: number;
+  sem_numero: boolean;
+  created_at: string | null;
+}
+
+export interface FaixaCreate {
+  sem_numero?: boolean;
+  numero_inicio?: number | null;
+  numero_fim?: number | null;
+  quantidade?: number | null;
+}
+
+export interface FaixaUpdate {
+  sem_numero?: boolean | null;
+  numero_inicio?: number | null;
+  numero_fim?: number | null;
+  quantidade?: number | null;
+}
+
+// --- Split por tipo (cru/assado) ---
+
+export interface ItemTipo {
+  tipo: string;
+  qtd_vendido: number;
+  qtd_pedido: number;
+}
+
+export interface ItensUpdate {
+  itens: ItemTipo[];
+}
+
+export interface ItemOut {
+  id: number;
+  tipo: string;
+  qtd_vendido: number;
+  qtd_pedido: number;
+}
+
+export interface ResumoItemTipo {
+  tipo: string;
+  total_vendido: number;
+  total_pedido: number;
 }
 
 export interface PagamentoCreate {
@@ -311,6 +367,7 @@ export interface EventoResumo {
   cartoes_devolvidos: number;
   cartoes_pagou_custo: number;
   proximo_numero: number;
+  itens_por_tipo: ResumoItemTipo[];
 }
 
 // === Jogos ===

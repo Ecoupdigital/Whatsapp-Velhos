@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Calendar,
@@ -10,7 +10,6 @@ import {
   Users,
   Plus,
   Check,
-  X,
   DollarSign,
   Plane,
   Music,
@@ -23,8 +22,8 @@ import {
   AlertTriangle,
   RotateCcw,
   UserPlus,
-  ChevronDown,
   Ticket,
+  Flame,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -38,6 +37,7 @@ import type {
   ContaOut,
   PagamentoOut,
   EventoResumo,
+  ItemTipo,
 } from "@/types";
 import {
   Button,
@@ -50,6 +50,8 @@ import {
   ModalFooter,
   EmptyState,
 } from "@/components/ui";
+import { ParticipantesGrid } from "@/components/eventos/ParticipantesGrid";
+import { FaixasPanel } from "@/components/eventos/FaixasPanel";
 
 /* ─── Constants ──────────────────────────────────────────────── */
 
@@ -107,6 +109,7 @@ interface EditForm {
   custo_cartao: number;
   qtd_cartoes_padrao_jogador: number;
   qtd_cartoes_padrao_socio: number;
+  tipos_item: string;
 }
 
 function todayISO(): string {
@@ -172,20 +175,8 @@ export default function EventoDetailPage() {
     custo_cartao: 0,
     qtd_cartoes_padrao_jogador: 0,
     qtd_cartoes_padrao_socio: 0,
+    tipos_item: "",
   });
-
-  // Cartões modal
-  const [cartoesModalOpen, setCartoesModalOpen] = useState(false);
-  const [cartoesParticipante, setCartoesParticipante] = useState<ParticipanteOut | null>(null);
-  const [cartoesForm, setCartoesForm] = useState({
-    qtd_cartoes_recebidos: "",
-    numero_inicio: "",
-    numero_fim: "",
-    qtd_vendidos: "",
-    qtd_devolvidos: "",
-    qtd_pagou_custo: "",
-  });
-  const [cartoesSaving, setCartoesSaving] = useState(false);
 
   // Delete event
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -407,58 +398,74 @@ export default function EventoDetailPage() {
       custo_cartao: evento.custo_cartao || 0,
       qtd_cartoes_padrao_jogador: evento.qtd_cartoes_padrao_jogador || 0,
       qtd_cartoes_padrao_socio: evento.qtd_cartoes_padrao_socio || 0,
+      tipos_item: (evento.tipos_item || []).join(", "),
     });
     setEditModalOpen(true);
   };
 
-  const openCartoesModal = (part: ParticipanteOut) => {
-    setCartoesParticipante(part);
-    setCartoesForm({
-      qtd_cartoes_recebidos: String(part.qtd_cartoes_recebidos || 0),
-      numero_inicio: part.numero_inicio != null ? String(part.numero_inicio) : "",
-      numero_fim: part.numero_fim != null ? String(part.numero_fim) : "",
-      qtd_vendidos: String(part.qtd_vendidos || 0),
-      qtd_devolvidos: String(part.qtd_devolvidos || 0),
-      qtd_pagou_custo: String(part.qtd_pagou_custo || 0),
-    });
-    setCartoesModalOpen(true);
-  };
-
-  const handleSaveCartoes = async () => {
-    if (!cartoesParticipante) return;
-    const recebidos = parseInt(cartoesForm.qtd_cartoes_recebidos) || 0;
-    const vendidos = parseInt(cartoesForm.qtd_vendidos) || 0;
-    const devolvidos = parseInt(cartoesForm.qtd_devolvidos) || 0;
-    const pagouCusto = parseInt(cartoesForm.qtd_pagou_custo) || 0;
-
-    if (vendidos + devolvidos + pagouCusto > recebidos) {
-      toast.error("Soma vendidos+devolvidos+pagou_custo nao pode exceder recebidos");
-      return;
-    }
-
+  const refetchParticipante = useCallback(async (pid: number) => {
     try {
-      setCartoesSaving(true);
-      await api.put(
-        `/eventos/${eventoId}/participantes/${cartoesParticipante.id}/cartoes`,
-        {
-          qtd_cartoes_recebidos: recebidos,
-          numero_inicio: cartoesForm.numero_inicio ? parseInt(cartoesForm.numero_inicio) : null,
-          numero_fim: cartoesForm.numero_fim ? parseInt(cartoesForm.numero_fim) : null,
-          qtd_vendidos: vendidos,
-          qtd_devolvidos: devolvidos,
-          qtd_pagou_custo: pagouCusto,
-        }
-      );
-      toast.success("Cartoes atualizados");
-      setCartoesModalOpen(false);
-      setCartoesParticipante(null);
+      const fresh = await api.get<ParticipanteOut>(`/eventos/${eventoId}/participantes/${pid}`);
+      setParticipantes((prev) => prev.map((p) => (p.id === pid ? fresh : p)));
+    } catch {
       fetchAll();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Erro ao salvar cartoes");
-    } finally {
-      setCartoesSaving(false);
     }
-  };
+  }, [eventoId, fetchAll]);
+
+  const commitCartaoCampo = useCallback(
+    async (
+      part: ParticipanteOut,
+      campo: "qtd_vendidos" | "qtd_devolvidos" | "qtd_pagou_custo",
+      valor: number
+    ) => {
+      try {
+        await api.put(`/eventos/${eventoId}/participantes/${part.id}/cartoes`, {
+          qtd_vendidos: campo === "qtd_vendidos" ? valor : part.qtd_vendidos,
+          qtd_devolvidos: campo === "qtd_devolvidos" ? valor : part.qtd_devolvidos,
+          qtd_pagou_custo: campo === "qtd_pagou_custo" ? valor : part.qtd_pagou_custo,
+        });
+        await refetchParticipante(part.id);
+        const res = await api.get<EventoResumo>(`/eventos/${eventoId}/resumo`);
+        setResumo(res);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao salvar");
+        throw err; // celula reverte
+      }
+    },
+    [eventoId, refetchParticipante]
+  );
+
+  const commitItemCampo = useCallback(
+    async (
+      part: ParticipanteOut,
+      tipo: string,
+      campo: "qtd_vendido" | "qtd_pedido",
+      valor: number
+    ) => {
+      const tipos = evento?.tipos_item || [];
+      const atuais = new Map(part.itens.map((it) => [it.tipo, it]));
+      const itens: ItemTipo[] = tipos.map((t) => {
+        const cur = atuais.get(t);
+        const base: ItemTipo = {
+          tipo: t,
+          qtd_vendido: cur?.qtd_vendido ?? 0,
+          qtd_pedido: cur?.qtd_pedido ?? 0,
+        };
+        if (t === tipo) base[campo] = valor;
+        return base;
+      });
+      try {
+        await api.put(`/eventos/${eventoId}/participantes/${part.id}/itens`, { itens });
+        await refetchParticipante(part.id);
+        const res = await api.get<EventoResumo>(`/eventos/${eventoId}/resumo`);
+        setResumo(res);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao salvar split");
+        throw err;
+      }
+    },
+    [eventoId, evento, refetchParticipante]
+  );
 
   const handleEditSubmit = async () => {
     if (!editForm.titulo.trim()) {
@@ -484,6 +491,10 @@ export default function EventoDetailPage() {
         custo_cartao: editForm.custo_cartao,
         qtd_cartoes_padrao_jogador: editForm.qtd_cartoes_padrao_jogador,
         qtd_cartoes_padrao_socio: editForm.qtd_cartoes_padrao_socio,
+        tipos_item: editForm.tipos_item
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter((s) => s.length > 0),
       };
       await api.put<EventoOut>(`/eventos/${eventoId}`, payload);
       toast.success("Evento atualizado");
@@ -792,6 +803,62 @@ export default function EventoDetailPage() {
         </motion.div>
       )}
 
+      {/* ── Relacao Cru x Assado ──────────────────────────────── */}
+      {resumo && resumo.itens_por_tipo && resumo.itens_por_tipo.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.09 }}
+          className="bg-surface-card border border-border-subtle rounded-lg p-4"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Flame size={16} className="text-orange-400" />
+            <p className="text-xs font-display uppercase tracking-wider text-txt-secondary">
+              Relacao Cru x Assado (a repassar)
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-txt-tertiary font-body text-xs uppercase tracking-wider">
+                  <th className="py-1.5 pr-4 font-medium">Tipo</th>
+                  <th className="py-1.5 px-4 font-medium text-right">Vendido</th>
+                  <th className="py-1.5 px-4 font-medium text-right">Pedido</th>
+                  <th className="py-1.5 pl-4 font-medium text-right">Total a repassar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumo.itens_por_tipo.map((it) => (
+                  <tr key={it.tipo} className="border-t border-border-subtle">
+                    <td className="py-2 pr-4 capitalize text-txt-primary font-body">{it.tipo}</td>
+                    <td className="py-2 px-4 text-right font-mono text-emerald-400">{it.total_vendido}</td>
+                    <td className="py-2 px-4 text-right font-mono text-blue-400">{it.total_pedido}</td>
+                    <td className="py-2 pl-4 text-right font-mono font-bold text-txt-primary">
+                      {it.total_vendido + it.total_pedido}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border">
+                  <td className="py-2 pr-4 text-txt-secondary font-display uppercase text-xs tracking-wider">Total geral</td>
+                  <td className="py-2 px-4 text-right font-mono text-emerald-400">
+                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_vendido, 0)}
+                  </td>
+                  <td className="py-2 px-4 text-right font-mono text-blue-400">
+                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_pedido, 0)}
+                  </td>
+                  <td className="py-2 pl-4 text-right font-mono font-bold text-orange-400">
+                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_vendido + it.total_pedido, 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </motion.div>
+      )}
+
       {/* ── Toolbar + Filtros ─────────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -867,160 +934,58 @@ export default function EventoDetailPage() {
               }
             />
           ) : (
-            <div className="space-y-2">
-              <AnimatePresence>
-                {filtered.map((part, idx) => {
-                  const status = pStatusDerivado(part);
-                  const statusColor =
-                    status === "pago"
-                      ? "text-emerald-400 bg-emerald-500/15"
-                      : status === "parcial"
-                      ? "text-blue-400 bg-blue-500/15"
-                      : "text-yellow-400 bg-yellow-500/15";
-                  const isExpanded = expandedParticipanteId === part.id;
-                  const histPagamentos = pagamentos.filter(
-                    (pg) => pg.evento_participante_id === part.id
-                  );
-                  const tipo = part.jogador?.tipo || (part.jogador_id ? "jogador" : "convidado");
-
-                  return (
-                    <motion.div
-                      key={part.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 10 }}
-                      transition={{ delay: idx * 0.02 }}
-                      className="border border-border-subtle rounded-lg bg-surface-card overflow-hidden"
-                    >
-                      <div className="flex items-center gap-3 p-3">
-                        <div className="h-9 w-9 rounded-full bg-surface-tertiary border border-border-subtle flex items-center justify-center shrink-0">
-                          <span className="text-xs font-semibold text-txt-secondary font-display">
-                            {nomeParticipante(part).charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-medium text-txt-primary font-body truncate">
-                              {nomeParticipante(part)}
-                            </p>
-                            <span className={cn(
-                              "px-1.5 py-0.5 rounded text-[10px] font-medium uppercase",
-                              tipo === "socio" ? "bg-purple-500/15 text-purple-400" :
-                              tipo === "convidado" ? "bg-amber-500/15 text-amber-400" :
-                              "bg-brand-red/15 text-brand-red"
-                            )}>
-                              {tipo}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-txt-tertiary font-mono flex-wrap">
-                            <span>
-                              {formatCurrency(part.valor_pago || 0)} / {formatCurrency(part.valor || 0)}
-                            </span>
-                            {part.qtd_cartoes_recebidos > 0 && (
-                              <span className="text-blue-400">
-                                <Ticket size={10} className="inline mr-1" />
-                                {part.qtd_vendidos}/{part.qtd_cartoes_recebidos}
-                                {part.numero_inicio != null && part.numero_fim != null && (
-                                  <span className="text-txt-tertiary ml-1">
-                                    ({part.numero_inicio}-{part.numero_fim})
-                                  </span>
-                                )}
-                              </span>
-                            )}
-                            {contaNome(part.conta_id) && (
-                              <span className="text-txt-secondary">{contaNome(part.conta_id)}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        <span className={cn(
-                          "px-2 py-1 rounded-full text-xs font-medium uppercase",
-                          statusColor
-                        )}>
-                          {status}
-                        </span>
-
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={<Ticket size={14} />}
-                          onClick={() => openCartoesModal(part)}
-                        >
-                          Cartoes
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          icon={<DollarSign size={14} />}
-                          onClick={() => openPayModal(part)}
-                          disabled={status === "pago"}
-                        >
-                          Pagar
-                        </Button>
-
-                        <button
-                          onClick={() => setExpandedParticipanteId(isExpanded ? null : part.id)}
-                          className="h-8 w-8 rounded-lg flex items-center justify-center text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary transition-colors"
-                          title="Historico"
-                        >
-                          <ChevronDown size={16} className={cn("transition-transform", isExpanded && "rotate-180")} />
-                        </button>
-
-                        <button
-                          onClick={() => handleRemoverParticipante(part)}
-                          className="h-8 w-8 rounded-lg flex items-center justify-center text-txt-tertiary hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Remover do evento"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="border-t border-border-subtle bg-surface-secondary/40 px-3 py-2">
-                          {histPagamentos.length === 0 ? (
-                            <p className="text-xs text-txt-tertiary font-body py-2">
-                              Sem pagamentos registrados
-                            </p>
-                          ) : (
-                            <div className="space-y-1">
-                              <p className="text-xs text-txt-tertiary uppercase tracking-wider font-body mb-2">
-                                Historico
-                              </p>
-                              {histPagamentos.map((pg) => (
-                                <div
-                                  key={pg.id}
-                                  className="flex items-center gap-3 text-xs py-1.5 px-2 rounded hover:bg-surface-card"
-                                >
-                                  <span className="font-mono text-txt-secondary">{pg.data}</span>
-                                  <span className="font-mono text-emerald-400">
-                                    {formatCurrency(pg.valor)}
-                                  </span>
-                                  {pg.forma_pagto && (
-                                    <span className="text-txt-tertiary uppercase">{pg.forma_pagto}</span>
-                                  )}
-                                  {contaNome(pg.conta_id) && (
-                                    <span className="text-txt-secondary">{contaNome(pg.conta_id)}</span>
-                                  )}
-                                  <div className="flex-1" />
-                                  <button
-                                    onClick={() => handleEstornar(pg.id)}
-                                    className="text-txt-tertiary hover:text-red-400 transition-colors"
-                                    title="Estornar"
-                                  >
-                                    <RotateCcw size={12} />
-                                  </button>
-                                </div>
-                              ))}
+            <ParticipantesGrid
+              participantes={filtered}
+              evento={evento}
+              expandedId={expandedParticipanteId}
+              onToggleExpand={(id) => setExpandedParticipanteId(expandedParticipanteId === id ? null : id)}
+              onPay={openPayModal}
+              onRemove={handleRemoverParticipante}
+              commitCartaoCampo={commitCartaoCampo}
+              commitItemCampo={commitItemCampo}
+              nomeParticipante={nomeParticipante}
+              statusDerivado={pStatusDerivado}
+              renderExpanded={(p) => {
+                const hist = pagamentos.filter((pg) => pg.evento_participante_id === p.id);
+                return (
+                  <div className="space-y-3">
+                    <FaixasPanel
+                      eventoId={eventoId}
+                      participante={p}
+                      onMutated={(atualizado) => {
+                        if (atualizado) {
+                          setParticipantes((prev) => prev.map((x) => (x.id === atualizado.id ? atualizado : x)));
+                        } else {
+                          refetchParticipante(p.id);
+                        }
+                        api.get<EventoResumo>(`/eventos/${eventoId}/resumo`).then(setResumo).catch(() => {});
+                      }}
+                    />
+                    <div className="border-t border-border-subtle pt-2">
+                      {hist.length === 0 ? (
+                        <p className="text-xs text-txt-tertiary font-body py-1">Sem pagamentos registrados</p>
+                      ) : (
+                        <div className="space-y-1">
+                          <p className="text-xs text-txt-tertiary uppercase tracking-wider font-body mb-1">Historico</p>
+                          {hist.map((pg) => (
+                            <div key={pg.id} className="flex items-center gap-3 text-xs py-1 px-2 rounded hover:bg-surface-card">
+                              <span className="font-mono text-txt-secondary">{pg.data}</span>
+                              <span className="font-mono text-emerald-400">{formatCurrency(pg.valor)}</span>
+                              {pg.forma_pagto && <span className="text-txt-tertiary uppercase">{pg.forma_pagto}</span>}
+                              {contaNome(pg.conta_id) && <span className="text-txt-secondary">{contaNome(pg.conta_id)}</span>}
+                              <div className="flex-1" />
+                              <button onClick={() => handleEstornar(pg.id)} className="text-txt-tertiary hover:text-red-400" title="Estornar">
+                                <RotateCcw size={12} />
+                              </button>
                             </div>
-                          )}
+                          ))}
                         </div>
                       )}
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
+                    </div>
+                  </div>
+                );
+              }}
+            />
           )}
         </Card>
       </motion.div>
@@ -1140,86 +1105,6 @@ export default function EventoDetailPage() {
         </ModalFooter>
       </Modal>
 
-      {/* ── Cartões Modal ────────────────────────────────────── */}
-      <Modal open={cartoesModalOpen} onClose={() => setCartoesModalOpen(false)} size="md">
-        <ModalHeader>
-          Cartoes - {cartoesParticipante ? nomeParticipante(cartoesParticipante) : ""}
-        </ModalHeader>
-        <ModalBody className="space-y-3">
-          {evento && (
-            <div className="text-xs text-txt-tertiary font-body bg-surface-secondary p-3 rounded-lg">
-              <p>Valor cartao: <span className="font-mono text-txt-secondary">{formatCurrency(evento.valor_cartao || 0)}</span></p>
-              <p>Custo cartao: <span className="font-mono text-txt-secondary">{formatCurrency(evento.custo_cartao || 0)}</span></p>
-              {resumo && (
-                <p className="mt-1">Proximo numero disponivel: <span className="font-mono text-txt-secondary">{resumo.proximo_numero}</span></p>
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-3 gap-3">
-            <Input
-              label="Recebidos"
-              type="number"
-              min={0}
-              value={cartoesForm.qtd_cartoes_recebidos}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_cartoes_recebidos: e.target.value }))}
-            />
-            <Input
-              label="Numero inicial"
-              type="number"
-              min={0}
-              value={cartoesForm.numero_inicio}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, numero_inicio: e.target.value }))}
-            />
-            <Input
-              label="Numero final"
-              type="number"
-              min={0}
-              value={cartoesForm.numero_fim}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, numero_fim: e.target.value }))}
-            />
-          </div>
-
-          <p className="text-xs text-txt-tertiary uppercase tracking-wider font-display pt-2">
-            Reconciliacao
-          </p>
-          <div className="grid grid-cols-3 gap-3">
-            <Input
-              label="Vendidos"
-              type="number"
-              min={0}
-              value={cartoesForm.qtd_vendidos}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_vendidos: e.target.value }))}
-            />
-            <Input
-              label="Devolvidos"
-              type="number"
-              min={0}
-              value={cartoesForm.qtd_devolvidos}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_devolvidos: e.target.value }))}
-            />
-            <Input
-              label="Pagou custo"
-              type="number"
-              min={0}
-              value={cartoesForm.qtd_pagou_custo}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_pagou_custo: e.target.value }))}
-            />
-          </div>
-          <p className="text-xs text-txt-tertiary font-body">
-            Soma deve fechar com Recebidos. Devolvidos nao pagam. Pagou custo paga apenas o custo (R$ {(evento?.custo_cartao || 0).toFixed(2)}).
-          </p>
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => setCartoesModalOpen(false)}>
-            Cancelar
-          </Button>
-          <Button loading={cartoesSaving} onClick={handleSaveCartoes}>
-            Salvar
-          </Button>
-        </ModalFooter>
-      </Modal>
-
       {/* ── Edit Event Modal ─────────────────────────────────── */}
       <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} size="lg">
         <ModalHeader>Editar Evento</ModalHeader>
@@ -1325,6 +1210,21 @@ export default function EventoDetailPage() {
             </div>
             <p className="text-xs text-txt-tertiary mt-2 font-body">
               Quando &quot;valor cartao&quot; for definido, o valor cobrado de cada participante e calculado automaticamente: vendidos x valor_cartao + pagou_custo x custo_cartao.
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-border-subtle">
+            <p className="text-xs text-txt-tertiary uppercase tracking-wider font-display mb-2">
+              Tipos de item (Galeto)
+            </p>
+            <Input
+              label="Tipos separados por virgula"
+              placeholder="cru, assado"
+              value={editForm.tipos_item}
+              onChange={(e) => updateEditField("tipos_item", e.target.value)}
+            />
+            <p className="text-xs text-txt-tertiary mt-2 font-body">
+              Define as colunas de split do grid (ex: cru, assado). Deixe vazio para eventos sem split por tipo.
             </p>
           </div>
 
