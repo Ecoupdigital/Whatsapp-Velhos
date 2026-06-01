@@ -7,9 +7,9 @@
 
 ## Posicao Atual
 **Fase:** 1 de 3
-**Plano:** 2 de 3 (01-01 e 01-02 completos)
-**Status:** Em andamento
-**Progresso:** [██░░░░░░░░] 20%
+**Plano:** 3 de 3 (01-01, 01-02 e 01-03 completos)
+**Status:** Fase 1 COMPLETA
+**Progresso:** [███░░░░░░░] 33%
 **Requisitos:** 30 (novos)
 
 ## Contexto Acumulado
@@ -24,10 +24,11 @@ Ver PROJECT.md Key Decisions e SYSTEM-DESIGN.md.
 ### Planos Completos
 - 01-01: Modelos EventoCartaoFaixa, EventoParticipanteItem, coluna tipos_item em Evento (commit do plano anterior)
 - 01-02: migrations.py ADD COLUMN idempotente + backfill + wiring no boot (eeb9f8a)
+- 01-03: suite pytest 4 testes (MIG-04/05, TEST-01/06) + infra (pytest.ini, conftest, tempfile engine) (c10702f)
 
 ### Bloqueios
 Nenhum
 
 ## Continuidade de Sessao
-Ultimo trabalho: 01-02 completo - migrations.py criado, main.py atualizado, boot e2e verificado.
-Proxima acao: plano 01-03 (testes de integracao MIG-01..MIG-05, TEST-01, TEST-06).
+Ultimo trabalho: 01-03 completo - suite pytest criada, 4 testes passando, gate da Fase 1 verde.
+Proxima acao: Fase 2 (planos 02-xx) - rotas de API para faixas de cartao e itens por tipo.
