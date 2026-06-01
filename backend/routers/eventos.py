@@ -442,6 +442,85 @@ def remover_faixa(evento_id: int, participante_id: int, faixa_id: int, db: Sessi
     return p
 
 
+# ─── Itens por tipo (cru/assado) ──────────────────────────────────
+
+@router.get("/{evento_id}/participantes/{participante_id}/itens", response_model=list[ItemOut])
+def listar_itens(evento_id: int, participante_id: int, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    return (
+        db.query(EventoParticipanteItem)
+        .filter(EventoParticipanteItem.evento_participante_id == p.id)
+        .order_by(EventoParticipanteItem.id)
+        .all()
+    )
+
+
+@router.put("/{evento_id}/participantes/{participante_id}/itens", response_model=ParticipanteOut)
+def atualizar_itens(
+    evento_id: int,
+    participante_id: int,
+    data: ItensUpdate,
+    db: Session = Depends(get_db),
+):
+    """Substituicao total dos itens por tipo do participante.
+
+    - Valida que cada tipo pertence a evento.tipos_item (se o evento define tipos).
+    - Upsert por (participante, tipo); tipos omitidos no payload sao REMOVIDOS.
+    - Fechamento: sum(qtd_vendido) deve ser igual a p.qtd_vendidos (400 senao).
+    - qtd_pedido e livre (sem validacao de soma).
+    """
+    p = _carregar_participante(db, evento_id, participante_id)
+
+    tipos_validos = _tipos_do_evento(p.evento) if p.evento else []
+
+    # 1. Validar tipos e duplicidade no payload
+    vistos: set[str] = set()
+    for it in data.itens:
+        if tipos_validos and it.tipo not in tipos_validos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tipo '{it.tipo}' nao pertence aos tipos do evento ({tipos_validos})",
+            )
+        if it.tipo in vistos:
+            raise HTTPException(status_code=400, detail=f"Tipo '{it.tipo}' duplicado no payload")
+        vistos.add(it.tipo)
+
+    # 2. Validar fechamento de vendidos
+    soma_vendido = sum(it.qtd_vendido or 0 for it in data.itens)
+    if soma_vendido != (p.qtd_vendidos or 0):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Soma dos vendidos por tipo ({soma_vendido}) deve bater com vendidos do participante ({p.qtd_vendidos or 0})",
+        )
+
+    # 3. Substituicao total: indexar existentes, upsert presentes, remover ausentes
+    existentes = {
+        i.tipo: i
+        for i in db.query(EventoParticipanteItem).filter(
+            EventoParticipanteItem.evento_participante_id == p.id
+        ).all()
+    }
+    novos_tipos = {it.tipo for it in data.itens}
+    for tipo, item in existentes.items():
+        if tipo not in novos_tipos:
+            db.delete(item)
+    for it in data.itens:
+        if it.tipo in existentes:
+            existentes[it.tipo].qtd_vendido = it.qtd_vendido
+            existentes[it.tipo].qtd_pedido = it.qtd_pedido
+        else:
+            db.add(EventoParticipanteItem(
+                evento_participante_id=p.id,
+                tipo=it.tipo,
+                qtd_vendido=it.qtd_vendido,
+                qtd_pedido=it.qtd_pedido,
+            ))
+
+    db.commit()
+    db.refresh(p)
+    return p
+
+
 # ─── Pagamentos ───────────────────────────────────────────────────
 
 def _nome_participante(p: EventoParticipante) -> str:
