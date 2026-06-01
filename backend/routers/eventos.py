@@ -1,17 +1,21 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
 from datetime import datetime
 
 from database import get_db
-from models import Evento, EventoParticipante, Jogador, Transacao
+from models import Evento, EventoParticipante, EventoParticipanteItem, Jogador, Transacao, EventoCartaoFaixa
 from schemas import (
     EventoCreate, EventoUpdate, EventoOut,
     ParticipanteUpdate, ParticipanteOut,
     ParticipanteAvulsoCreate,
     PagamentoCreate, PagamentoOut,
-    EventoResumo,
+    EventoResumo, ResumoItemTipo,
     CartoesUpdate,
+    FaixaCreate, FaixaUpdate, FaixaOut,
+    ItensUpdate, ItemOut,
 )
 from auth import get_current_user
 
@@ -36,7 +40,10 @@ def listar(
 
 @router.post("", response_model=EventoOut, status_code=201)
 def criar(data: EventoCreate, db: Session = Depends(get_db)):
-    e = Evento(**data.model_dump())
+    payload = data.model_dump()
+    if payload.get("tipos_item") is not None:
+        payload["tipos_item"] = json.dumps(payload["tipos_item"])
+    e = Evento(**payload)
     db.add(e)
     db.commit()
     db.refresh(e)
@@ -56,7 +63,10 @@ def atualizar(evento_id: int, data: EventoUpdate, db: Session = Depends(get_db))
     e = db.query(Evento).filter(Evento.id == evento_id).first()
     if not e:
         raise HTTPException(status_code=404, detail="Evento nao encontrado")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    if "tipos_item" in updates:
+        updates["tipos_item"] = json.dumps(updates["tipos_item"]) if updates["tipos_item"] is not None else None
+    for field, value in updates.items():
         setattr(e, field, value)
     db.commit()
     db.refresh(e)
@@ -139,13 +149,19 @@ def adicionar_avulso(evento_id: int, data: ParticipanteAvulsoCreate, db: Session
 
 
 def _proximo_numero(db: Session, evento_id: int) -> int:
-    """Proximo numero disponivel pra cartoes nesse evento."""
-    max_fim = (
+    """Proximo numero disponivel: max entre numero_fim legado (participante) e das faixas."""
+    max_part = (
         db.query(func.max(EventoParticipante.numero_fim))
         .filter(EventoParticipante.evento_id == evento_id)
         .scalar()
     )
-    return (max_fim or 0) + 1
+    max_faixa = (
+        db.query(func.max(EventoCartaoFaixa.numero_fim))
+        .join(EventoParticipante, EventoParticipante.id == EventoCartaoFaixa.evento_participante_id)
+        .filter(EventoParticipante.evento_id == evento_id)
+        .scalar()
+    )
+    return max(max_part or 0, max_faixa or 0) + 1
 
 
 def _recalcular_valor_esperado(p: EventoParticipante, evento: Evento):
@@ -158,9 +174,24 @@ def _recalcular_valor_esperado(p: EventoParticipante, evento: Evento):
         p.valor = float(valor)
 
 
+def _recalc_recebidos(p: EventoParticipante):
+    """Recebidos e DERIVADO da soma das faixas. Cliente nunca dita esse valor."""
+    p.qtd_cartoes_recebidos = sum(f.quantidade or 0 for f in p.faixas)
+
+
+def _validar_reconciliacao(p: EventoParticipante):
+    total_destino = (p.qtd_vendidos or 0) + (p.qtd_devolvidos or 0) + (p.qtd_pagou_custo or 0)
+    if total_destino > (p.qtd_cartoes_recebidos or 0):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Soma vendidos+devolvidos+pagou_custo ({total_destino}) excede recebidos ({p.qtd_cartoes_recebidos})",
+        )
+
+
 @router.post("/{evento_id}/popular", response_model=list[ParticipanteOut])
 def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
-    """Adiciona todos jogadores ativos ao evento com valor + cartoes padrao."""
+    """Adiciona todos jogadores ativos ao evento. Cartoes via 1 faixa numerada por jogador (qtd>0).
+    Recebidos e DERIVADO da soma das faixas (nao setado inline)."""
     e = db.query(Evento).filter(Evento.id == evento_id).first()
     if not e:
         raise HTTPException(status_code=404, detail="Evento nao encontrado")
@@ -179,19 +210,10 @@ def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
         is_socio = j.tipo == "socio"
         qtd = (e.qtd_cartoes_padrao_socio if is_socio else e.qtd_cartoes_padrao_jogador) or 0
 
-        # Valor padrao: por valor fixo OU por cartoes (se valor_cartao definido)
         if e.valor_cartao and qtd > 0:
-            # Valor presume que vai vender tudo
             valor = qtd * e.valor_cartao
         else:
             valor = (e.valor_socio if is_socio else e.valor_jogador) or 0
-
-        numero_ini = None
-        numero_f = None
-        if qtd > 0:
-            numero_ini = proximo
-            numero_f = proximo + qtd - 1
-            proximo = numero_f + 1
 
         p = EventoParticipante(
             evento_id=evento_id,
@@ -200,11 +222,26 @@ def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
             valor_pago=0,
             status="pendente",
             pago=0,
-            qtd_cartoes_recebidos=qtd,
-            numero_inicio=numero_ini,
-            numero_fim=numero_f,
+            qtd_cartoes_recebidos=0,  # derivado das faixas abaixo
         )
         db.add(p)
+        db.flush()  # garante p.id para a FK da faixa
+
+        if qtd > 0:
+            numero_ini = proximo
+            numero_f = proximo + qtd - 1
+            proximo = numero_f + 1
+            db.add(EventoCartaoFaixa(
+                evento_participante_id=p.id,
+                numero_inicio=numero_ini,
+                numero_fim=numero_f,
+                quantidade=qtd,
+                sem_numero=0,
+            ))
+            db.flush()
+            db.refresh(p)
+            _recalc_recebidos(p)
+
     db.commit()
 
     return (
@@ -223,10 +260,16 @@ def atualizar_cartoes(
     data: CartoesUpdate,
     db: Session = Depends(get_db),
 ):
-    """Atualiza cartoes do participante e recalcula valor esperado."""
+    """Atualiza vendas/devolucao/custo e recalcula valor.
+    recebidos e DERIVADO das faixas: campos qtd_cartoes_recebidos/numero_inicio/numero_fim
+    do payload sao IGNORADOS (retrocompat: aceitos no schema mas nao aplicados)."""
     p = (
         db.query(EventoParticipante)
-        .options(joinedload(EventoParticipante.evento), joinedload(EventoParticipante.jogador))
+        .options(
+            joinedload(EventoParticipante.evento),
+            joinedload(EventoParticipante.jogador),
+            selectinload(EventoParticipante.faixas),
+        )
         .filter(
             EventoParticipante.id == participante_id,
             EventoParticipante.evento_id == evento_id,
@@ -237,33 +280,18 @@ def atualizar_cartoes(
         raise HTTPException(status_code=404, detail="Participante nao encontrado")
 
     payload = data.model_dump(exclude_unset=True)
+    # campos de venda/devolucao/custo sao os unicos aplicaveis aqui
+    for field in ("qtd_vendidos", "qtd_devolvidos", "qtd_pagou_custo"):
+        if field in payload and payload[field] is not None:
+            setattr(p, field, payload[field])
+    # qtd_cartoes_recebidos / numero_inicio / numero_fim do payload sao ignorados (derivado de faixas)
 
-    # Auto-ajusta numero_fim se mudou qtd_recebidos e tem numero_inicio
-    if "qtd_cartoes_recebidos" in payload:
-        novo_qtd = payload["qtd_cartoes_recebidos"] or 0
-        if novo_qtd > 0 and p.numero_inicio is None and "numero_inicio" not in payload:
-            # Auto-numerar a partir do proximo disponivel
-            proximo = _proximo_numero(db, evento_id)
-            payload["numero_inicio"] = proximo
-            payload["numero_fim"] = proximo + novo_qtd - 1
-        elif novo_qtd > 0 and p.numero_inicio is not None and "numero_fim" not in payload:
-            payload["numero_fim"] = p.numero_inicio + novo_qtd - 1
-
-    for field, value in payload.items():
-        setattr(p, field, value)
-
-    # Validacao reconciliacao: vendidos + devolvidos + pagou_custo <= recebidos
-    total_destino = (p.qtd_vendidos or 0) + (p.qtd_devolvidos or 0) + (p.qtd_pagou_custo or 0)
-    if total_destino > (p.qtd_cartoes_recebidos or 0):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Soma vendidos+devolvidos+pagou_custo ({total_destino}) excede recebidos ({p.qtd_cartoes_recebidos})",
-        )
+    _recalc_recebidos(p)
+    _validar_reconciliacao(p)
 
     if p.evento:
         _recalcular_valor_esperado(p, p.evento)
 
-    # Recalcula status pago derivado
     p.pago = 1 if p.valor and p.valor_pago and p.valor_pago >= p.valor else 0
 
     db.commit()
@@ -285,6 +313,218 @@ def remover_participante(evento_id: int, participante_id: int, db: Session = Dep
     db.delete(p)
     db.commit()
     return {"ok": True}
+
+
+# ─── Helpers de participante e faixas ────────────────────────────
+
+def _carregar_participante(db: Session, evento_id: int, participante_id: int) -> EventoParticipante:
+    p = (
+        db.query(EventoParticipante)
+        .options(
+            joinedload(EventoParticipante.evento),
+            joinedload(EventoParticipante.jogador),
+            selectinload(EventoParticipante.faixas),
+            selectinload(EventoParticipante.itens),
+        )
+        .filter(
+            EventoParticipante.id == participante_id,
+            EventoParticipante.evento_id == evento_id,
+        )
+        .first()
+    )
+    if not p:
+        raise HTTPException(status_code=404, detail="Participante nao encontrado")
+    return p
+
+
+def _tipos_do_evento(evento: Evento) -> list[str]:
+    """Desserializa tipos_item do evento (Text JSON). Retorna lista vazia se ausente/invalido."""
+    raw = getattr(evento, "tipos_item", None)
+    if not raw:
+        return []
+    try:
+        val = json.loads(raw) if isinstance(raw, str) else raw
+        return val if isinstance(val, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
+def _aplicar_dados_faixa(f: EventoCartaoFaixa, sem_numero: bool, numero_inicio, numero_fim, quantidade):
+    """Valida e seta campos da faixa segundo as regras de dominio (400 em erro)."""
+    if sem_numero:
+        if not quantidade or quantidade < 1:
+            raise HTTPException(status_code=400, detail="Lote sem numero exige quantidade >= 1")
+        f.sem_numero = 1
+        f.numero_inicio = None
+        f.numero_fim = None
+        f.quantidade = quantidade
+    else:
+        if numero_inicio is None or numero_fim is None:
+            raise HTTPException(status_code=400, detail="Faixa numerada exige numero_inicio e numero_fim")
+        if numero_inicio < 1:
+            raise HTTPException(status_code=400, detail="numero_inicio deve ser >= 1")
+        if numero_fim < numero_inicio:
+            raise HTTPException(status_code=400, detail="numero_fim deve ser >= numero_inicio")
+        f.sem_numero = 0
+        f.numero_inicio = numero_inicio
+        f.numero_fim = numero_fim
+        f.quantidade = numero_fim - numero_inicio + 1  # servidor recalcula, ignora qtd enviada
+
+
+def _pos_mutacao_faixa(db: Session, p: EventoParticipante):
+    """Cadeia padrao apos mutar faixas: recalc recebidos -> reconciliacao -> valor -> pago -> commit."""
+    db.flush()  # garante que faixas adicionadas/removidas refletem em p.faixas
+    db.refresh(p)
+    _recalc_recebidos(p)
+    _validar_reconciliacao(p)
+    if p.evento:
+        _recalcular_valor_esperado(p, p.evento)
+    p.pago = 1 if p.valor and p.valor_pago and p.valor_pago >= p.valor else 0
+    db.commit()
+    db.refresh(p)
+
+
+# ─── Participante singular (API-10) ──────────────────────────────
+
+@router.get("/{evento_id}/participantes/{participante_id}", response_model=ParticipanteOut)
+def detalhe_participante(evento_id: int, participante_id: int, db: Session = Depends(get_db)):
+    """Refetch granular de UM participante (jogador + faixas + itens). Usado pelo grid inline da Fase 3."""
+    return _carregar_participante(db, evento_id, participante_id)
+
+
+# ─── CRUD de faixas (API-01, API-02, API-08) ─────────────────────
+
+@router.get("/{evento_id}/participantes/{participante_id}/faixas", response_model=list[FaixaOut])
+def listar_faixas(evento_id: int, participante_id: int, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    return (
+        db.query(EventoCartaoFaixa)
+        .filter(EventoCartaoFaixa.evento_participante_id == p.id)
+        .order_by(EventoCartaoFaixa.id)
+        .all()
+    )
+
+
+@router.post("/{evento_id}/participantes/{participante_id}/faixas", response_model=ParticipanteOut, status_code=201)
+def criar_faixa(evento_id: int, participante_id: int, data: FaixaCreate, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    f = EventoCartaoFaixa(evento_participante_id=p.id)
+    _aplicar_dados_faixa(f, data.sem_numero, data.numero_inicio, data.numero_fim, data.quantidade)
+    db.add(f)
+    _pos_mutacao_faixa(db, p)
+    return p
+
+
+@router.put("/{evento_id}/participantes/{participante_id}/faixas/{faixa_id}", response_model=ParticipanteOut)
+def atualizar_faixa(evento_id: int, participante_id: int, faixa_id: int, data: FaixaUpdate, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    f = db.query(EventoCartaoFaixa).filter(
+        EventoCartaoFaixa.id == faixa_id,
+        EventoCartaoFaixa.evento_participante_id == p.id,
+    ).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="Faixa nao encontrada")
+    # merge: valores ausentes no payload mantem o atual da faixa
+    sem_numero = data.sem_numero if data.sem_numero is not None else bool(f.sem_numero)
+    numero_inicio = data.numero_inicio if data.numero_inicio is not None else f.numero_inicio
+    numero_fim = data.numero_fim if data.numero_fim is not None else f.numero_fim
+    quantidade = data.quantidade if data.quantidade is not None else f.quantidade
+    _aplicar_dados_faixa(f, sem_numero, numero_inicio, numero_fim, quantidade)
+    _pos_mutacao_faixa(db, p)
+    return p
+
+
+@router.delete("/{evento_id}/participantes/{participante_id}/faixas/{faixa_id}", response_model=ParticipanteOut)
+def remover_faixa(evento_id: int, participante_id: int, faixa_id: int, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    f = db.query(EventoCartaoFaixa).filter(
+        EventoCartaoFaixa.id == faixa_id,
+        EventoCartaoFaixa.evento_participante_id == p.id,
+    ).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="Faixa nao encontrada")
+    db.delete(f)
+    _pos_mutacao_faixa(db, p)  # se recebidos < vendidos+dev+custo -> 400 e rollback
+    return p
+
+
+# ─── Itens por tipo (cru/assado) ──────────────────────────────────
+
+@router.get("/{evento_id}/participantes/{participante_id}/itens", response_model=list[ItemOut])
+def listar_itens(evento_id: int, participante_id: int, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    return (
+        db.query(EventoParticipanteItem)
+        .filter(EventoParticipanteItem.evento_participante_id == p.id)
+        .order_by(EventoParticipanteItem.id)
+        .all()
+    )
+
+
+@router.put("/{evento_id}/participantes/{participante_id}/itens", response_model=ParticipanteOut)
+def atualizar_itens(
+    evento_id: int,
+    participante_id: int,
+    data: ItensUpdate,
+    db: Session = Depends(get_db),
+):
+    """Substituicao total dos itens por tipo do participante.
+
+    - Valida que cada tipo pertence a evento.tipos_item (se o evento define tipos).
+    - Upsert por (participante, tipo); tipos omitidos no payload sao REMOVIDOS.
+    - Fechamento: sum(qtd_vendido) deve ser igual a p.qtd_vendidos (400 senao).
+    - qtd_pedido e livre (sem validacao de soma).
+    """
+    p = _carregar_participante(db, evento_id, participante_id)
+
+    tipos_validos = _tipos_do_evento(p.evento) if p.evento else []
+
+    # 1. Validar tipos e duplicidade no payload
+    vistos: set[str] = set()
+    for it in data.itens:
+        if tipos_validos and it.tipo not in tipos_validos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tipo '{it.tipo}' nao pertence aos tipos do evento ({tipos_validos})",
+            )
+        if it.tipo in vistos:
+            raise HTTPException(status_code=400, detail=f"Tipo '{it.tipo}' duplicado no payload")
+        vistos.add(it.tipo)
+
+    # 2. Validar fechamento de vendidos
+    soma_vendido = sum(it.qtd_vendido or 0 for it in data.itens)
+    if soma_vendido != (p.qtd_vendidos or 0):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Soma dos vendidos por tipo ({soma_vendido}) deve bater com vendidos do participante ({p.qtd_vendidos or 0})",
+        )
+
+    # 3. Substituicao total: indexar existentes, upsert presentes, remover ausentes
+    existentes = {
+        i.tipo: i
+        for i in db.query(EventoParticipanteItem).filter(
+            EventoParticipanteItem.evento_participante_id == p.id
+        ).all()
+    }
+    novos_tipos = {it.tipo for it in data.itens}
+    for tipo, item in existentes.items():
+        if tipo not in novos_tipos:
+            db.delete(item)
+    for it in data.itens:
+        if it.tipo in existentes:
+            existentes[it.tipo].qtd_vendido = it.qtd_vendido
+            existentes[it.tipo].qtd_pedido = it.qtd_pedido
+        else:
+            db.add(EventoParticipanteItem(
+                evento_participante_id=p.id,
+                tipo=it.tipo,
+                qtd_vendido=it.qtd_vendido,
+                qtd_pedido=it.qtd_pedido,
+            ))
+
+    db.commit()
+    db.refresh(p)
+    return p
 
 
 # ─── Pagamentos ───────────────────────────────────────────────────
@@ -415,6 +655,22 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
     cartoes_pagou_custo = sum(p.qtd_pagou_custo or 0 for p in parts)
     proximo_num = _proximo_numero(db, evento_id)
 
+    rows = (
+        db.query(
+            EventoParticipanteItem.tipo,
+            func.coalesce(func.sum(EventoParticipanteItem.qtd_vendido), 0),
+            func.coalesce(func.sum(EventoParticipanteItem.qtd_pedido), 0),
+        )
+        .join(EventoParticipante, EventoParticipante.id == EventoParticipanteItem.evento_participante_id)
+        .filter(EventoParticipante.evento_id == evento_id)
+        .group_by(EventoParticipanteItem.tipo)
+        .all()
+    )
+    itens_por_tipo = [
+        ResumoItemTipo(tipo=t, total_vendido=int(v or 0), total_pedido=int(ped or 0))
+        for (t, v, ped) in rows
+    ]
+
     return EventoResumo(
         total_participantes=len(parts),
         pagos=pagos,
@@ -429,4 +685,5 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
         cartoes_devolvidos=cartoes_devolvidos,
         cartoes_pagou_custo=cartoes_pagou_custo,
         proximo_numero=proximo_num,
+        itens_por_tipo=itens_por_tipo,
     )

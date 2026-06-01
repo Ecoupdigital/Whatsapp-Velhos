@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+import json
 
 
 # === Auth ===
@@ -224,6 +225,7 @@ class EventoCreate(BaseModel):
     custo_cartao: float = 0
     qtd_cartoes_padrao_jogador: int = 0
     qtd_cartoes_padrao_socio: int = 0
+    tipos_item: Optional[list[str]] = None
 
 class EventoUpdate(BaseModel):
     tipo: Optional[str] = None
@@ -242,6 +244,7 @@ class EventoUpdate(BaseModel):
     custo_cartao: Optional[float] = None
     qtd_cartoes_padrao_jogador: Optional[int] = None
     qtd_cartoes_padrao_socio: Optional[int] = None
+    tipos_item: Optional[list[str]] = None
 
 class EventoOut(BaseModel):
     id: int
@@ -262,9 +265,84 @@ class EventoOut(BaseModel):
     qtd_cartoes_padrao_jogador: int = 0
     qtd_cartoes_padrao_socio: int = 0
     created_at: Optional[str]
+    tipos_item: Optional[list[str]] = None
+
+    @field_validator("tipos_item", mode="before")
+    @classmethod
+    def _parse_tipos_item(cls, v):
+        # banco guarda Text JSON ('["cru","assado"]') ou None/""
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (ValueError, TypeError):
+                return None
+        return v  # ja e list (vindo de payload, nao do banco)
 
     class Config:
         from_attributes = True
+
+class FaixaCreate(BaseModel):
+    sem_numero: bool = False
+    numero_inicio: Optional[int] = None
+    numero_fim: Optional[int] = None
+    quantidade: Optional[int] = None  # usado so quando sem_numero=True
+
+
+class FaixaUpdate(BaseModel):
+    sem_numero: Optional[bool] = None
+    numero_inicio: Optional[int] = None
+    numero_fim: Optional[int] = None
+    quantidade: Optional[int] = None
+
+
+class FaixaOut(BaseModel):
+    id: int
+    evento_participante_id: int
+    numero_inicio: Optional[int] = None
+    numero_fim: Optional[int] = None
+    quantidade: int
+    sem_numero: bool
+    created_at: Optional[str] = None
+
+    @field_validator("sem_numero", mode="before")
+    @classmethod
+    def _coerce_sem_numero(cls, v):
+        # banco guarda Integer 0/1; expor como bool
+        if isinstance(v, int):
+            return bool(v)
+        return v
+
+    class Config:
+        from_attributes = True
+
+
+class ItemTipo(BaseModel):
+    tipo: str
+    qtd_vendido: int = Field(default=0, ge=0)
+    qtd_pedido: int = Field(default=0, ge=0)
+
+
+class ItensUpdate(BaseModel):
+    itens: list[ItemTipo] = []
+
+
+class ItemOut(BaseModel):
+    id: int
+    tipo: str
+    qtd_vendido: int
+    qtd_pedido: int
+
+    class Config:
+        from_attributes = True
+
+
+class ResumoItemTipo(BaseModel):
+    tipo: str
+    total_vendido: int
+    total_pedido: int
+
 
 class ParticipanteUpdate(BaseModel):
     jogador_id: Optional[int] = None
@@ -310,6 +388,7 @@ class EventoResumo(BaseModel):
     cartoes_devolvidos: int = 0
     cartoes_pagou_custo: int = 0
     proximo_numero: int = 1
+    itens_por_tipo: list["ResumoItemTipo"] = []
 
 class CartoesUpdate(BaseModel):
     qtd_cartoes_recebidos: Optional[int] = None
@@ -339,6 +418,8 @@ class ParticipanteOut(BaseModel):
     qtd_pagou_custo: int = 0
     observacoes: Optional[str]
     jogador: Optional[JogadorOut] = None
+    faixas: list["FaixaOut"] = []
+    itens: list["ItemOut"] = []
 
     class Config:
         from_attributes = True
