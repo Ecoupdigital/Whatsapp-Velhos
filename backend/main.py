@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from database import engine, Base, SessionLocal
 from models import Usuario, Conta
 from auth import hash_password
+from migrations import run_additive_migrations
 
 from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes, contas, campanhas
 from routers.configuracoes import seed_defaults as seed_default_configs
@@ -15,8 +16,10 @@ from services.campanha_service import UPLOAD_DIR
 
 log = logging.getLogger(__name__)
 
-# Create tables (Postgres handles schema natively, no ALTER TABLE patches needed)
+# Cria tabelas novas (create_all NAO adiciona colunas em tabela existente)
 Base.metadata.create_all(bind=engine)
+# Migracoes aditivas idempotentes: ADD COLUMN tipos_item + backfill de faixas (rodam no boot)
+run_additive_migrations(engine)
 
 app = FastAPI(
     title="Velhos Parceiros FC - API",
