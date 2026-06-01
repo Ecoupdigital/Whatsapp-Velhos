@@ -25,6 +25,7 @@ import {
   UserPlus,
   ChevronDown,
   Ticket,
+  Flame,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -796,6 +797,62 @@ export default function EventoDetailPage() {
               />
             </div>
           )}
+        </motion.div>
+      )}
+
+      {/* ── Relacao Cru x Assado ──────────────────────────────── */}
+      {resumo && resumo.itens_por_tipo && resumo.itens_por_tipo.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.09 }}
+          className="bg-surface-card border border-border-subtle rounded-lg p-4"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Flame size={16} className="text-orange-400" />
+            <p className="text-xs font-display uppercase tracking-wider text-txt-secondary">
+              Relacao Cru x Assado (a repassar)
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-txt-tertiary font-body text-xs uppercase tracking-wider">
+                  <th className="py-1.5 pr-4 font-medium">Tipo</th>
+                  <th className="py-1.5 px-4 font-medium text-right">Vendido</th>
+                  <th className="py-1.5 px-4 font-medium text-right">Pedido</th>
+                  <th className="py-1.5 pl-4 font-medium text-right">Total a repassar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumo.itens_por_tipo.map((it) => (
+                  <tr key={it.tipo} className="border-t border-border-subtle">
+                    <td className="py-2 pr-4 capitalize text-txt-primary font-body">{it.tipo}</td>
+                    <td className="py-2 px-4 text-right font-mono text-emerald-400">{it.total_vendido}</td>
+                    <td className="py-2 px-4 text-right font-mono text-blue-400">{it.total_pedido}</td>
+                    <td className="py-2 pl-4 text-right font-mono font-bold text-txt-primary">
+                      {it.total_vendido + it.total_pedido}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border">
+                  <td className="py-2 pr-4 text-txt-secondary font-display uppercase text-xs tracking-wider">Total geral</td>
+                  <td className="py-2 px-4 text-right font-mono text-emerald-400">
+                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_vendido, 0)}
+                  </td>
+                  <td className="py-2 px-4 text-right font-mono text-blue-400">
+                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_pedido, 0)}
+                  </td>
+                  <td className="py-2 pl-4 text-right font-mono font-bold text-orange-400">
+                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_vendido + it.total_pedido, 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </motion.div>
       )}
 
