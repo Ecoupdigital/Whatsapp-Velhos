@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import json
 
@@ -320,8 +320,8 @@ class FaixaOut(BaseModel):
 
 class ItemTipo(BaseModel):
     tipo: str
-    qtd_vendido: int = 0
-    qtd_pedido: int = 0
+    qtd_vendido: int = Field(default=0, ge=0)
+    qtd_pedido: int = Field(default=0, ge=0)
 
 
 class ItensUpdate(BaseModel):

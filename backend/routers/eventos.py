@@ -361,6 +361,8 @@ def _aplicar_dados_faixa(f: EventoCartaoFaixa, sem_numero: bool, numero_inicio, 
     else:
         if numero_inicio is None or numero_fim is None:
             raise HTTPException(status_code=400, detail="Faixa numerada exige numero_inicio e numero_fim")
+        if numero_inicio < 1:
+            raise HTTPException(status_code=400, detail="numero_inicio deve ser >= 1")
         if numero_fim < numero_inicio:
             raise HTTPException(status_code=400, detail="numero_fim deve ser >= numero_inicio")
         f.sem_numero = 0
