@@ -109,6 +109,7 @@ class Evento(Base):
     custo_cartao = Column(Float, default=0)
     qtd_cartoes_padrao_jogador = Column(Integer, default=0)
     qtd_cartoes_padrao_socio = Column(Integer, default=0)
+    tipos_item = Column(Text)  # JSON serializado, ex: '["cru","assado"]'. NULL/"[]" = sem split por tipo.
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 
     participantes = relationship("EventoParticipante", back_populates="evento")
@@ -142,6 +143,18 @@ class EventoParticipante(Base):
 
     evento = relationship("Evento", back_populates="participantes")
     jogador = relationship("Jogador", back_populates="participacoes")
+    faixas = relationship(
+        "EventoCartaoFaixa",
+        back_populates="participante",
+        cascade="all, delete-orphan",
+        order_by="EventoCartaoFaixa.id",
+    )
+    itens = relationship(
+        "EventoParticipanteItem",
+        back_populates="participante",
+        cascade="all, delete-orphan",
+        order_by="EventoParticipanteItem.id",
+    )
 
 
 class Jogo(Base):
@@ -272,3 +285,44 @@ class CampanhaDestinatario(Base):
     enviado_em = Column(Text)
 
     campanha = relationship("Campanha", back_populates="destinatarios")
+
+
+class EventoCartaoFaixa(Base):
+    __tablename__ = "evento_cartao_faixa"
+    __table_args__ = (
+        Index("ix_faixa_participante", "evento_participante_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    evento_participante_id = Column(
+        Integer,
+        ForeignKey("evento_participantes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    numero_inicio = Column(Integer)          # NULL = lote sem numero
+    numero_fim = Column(Integer)             # NULL = lote sem numero
+    quantidade = Column(Integer, nullable=False, default=0)
+    sem_numero = Column(Integer, default=0)  # 0/1, padrao bool do projeto
+    created_at = Column(Text, default=lambda: datetime.now().isoformat())
+
+    participante = relationship("EventoParticipante", back_populates="faixas")
+
+
+class EventoParticipanteItem(Base):
+    __tablename__ = "evento_participante_item"
+    __table_args__ = (
+        Index("ix_item_participante", "evento_participante_id"),
+        Index("ix_item_part_tipo", "evento_participante_id", "tipo", unique=True),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    evento_participante_id = Column(
+        Integer,
+        ForeignKey("evento_participantes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tipo = Column(Text, nullable=False)
+    qtd_vendido = Column(Integer, default=0)
+    qtd_pedido = Column(Integer, default=0)
+
+    participante = relationship("EventoParticipante", back_populates="itens")
