@@ -23,6 +23,7 @@ tudo numa planilha inline e tem na hora a relacao total para encomendar com a co
 - [ ] MIG-01: Migracao aditiva idempotente no boot (ALTER coluna + backfill faixas)
 - [ ] MIG-02: Backfill preserva contagem de recebidos por participante (validavel)
 - [ ] MIG-03: Compatibilidade Postgres + SQLite (Text JSON, ADD COLUMN via inspector)
+- [ ] MIG-05: Migracao estritamente aditiva (sem DROP/rename; colunas legadas intactas, verificavel via inspect)
 - [ ] API-01: CRUD faixas (GET/POST/PUT/DELETE) com validacao numerada/sem-numero
 - [ ] API-02: `qtd_cartoes_recebidos` derivado da soma das faixas (servidor)
 - [ ] API-03: PUT itens por tipo com upsert e validacao de fechamento c/ vendidos

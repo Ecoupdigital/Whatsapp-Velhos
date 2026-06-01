@@ -10,6 +10,7 @@
 **Plano:** 0 de ?
 **Status:** Pronto para planejar
 **Progresso:** [░░░░░░░░░░] 0%
+**Requisitos:** 30 (novos)
 
 ## Contexto Acumulado
 

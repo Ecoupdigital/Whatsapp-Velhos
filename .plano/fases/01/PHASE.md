@@ -1,7 +1,7 @@
 # Fase 01: Schema + Migracao + Backfill
 
 **Objetivo:** Estrutura de dados pronta e dados legados migrados sem perda, em Postgres e SQLite.
-**Requisitos cobertos:** DB-01, DB-02, DB-03, DB-04, MIG-01, MIG-02, MIG-03, MIG-04, TEST-01, TEST-06
+**Requisitos cobertos:** DB-01, DB-02, DB-03, DB-04, MIG-01, MIG-02, MIG-03, MIG-04, MIG-05, TEST-01, TEST-06
 **Criterios de sucesso:**
 - [ ] App sobe em SQLite e Postgres com as 2 tabelas novas + coluna `tipos_item`
 - [ ] Apos boot, `sum(faixas.quantidade) == qtd_cartoes_recebidos` legado para todo participante

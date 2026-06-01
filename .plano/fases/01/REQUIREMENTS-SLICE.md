@@ -27,6 +27,9 @@ Para cada `EventoParticipante` que ainda nao tem nenhuma faixa (count == 0): se 
 ## MIG-04: Contagem preservada
 Pos-migracao, para todo participante `sum(faixas.quantidade) == qtd_cartoes_recebidos` legado. Verificavel por assert/script.
 
+## MIG-05: Migracao estritamente aditiva
+Sem DROP nem rename de tabelas/colunas existentes. Colunas legadas (`numero_inicio`, `numero_fim`, `qtd_cartoes_recebidos` do EventoParticipante) permanecem intactas. Verificavel: o schema pos-migracao contem TODAS as colunas pre-migracao (assert via `inspect()` comparando o conjunto de colunas antes e depois).
+
 ## TEST-01: Dados intactos
 Contagem de recebidos por participante igual antes e depois da migracao.
 

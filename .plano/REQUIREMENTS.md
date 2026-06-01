@@ -15,6 +15,7 @@
 - [ ] MIG-02: Backfill idempotente: cada participante SEM faixa recebe 1 faixa numerada (se tem numero_inicio+fim) ou 1 faixa sem_numero (se qtd_cartoes_recebidos > 0). Rodar 2x nao duplica.
 - [ ] MIG-03: Migracao funciona em Postgres E SQLite (Text JSON, ADD COLUMN portavel, bool 0/1). Nao usar JSONB nem IF NOT EXISTS.
 - [ ] MIG-04: Pos-migracao, para todo participante `sum(faixas.quantidade) == qtd_cartoes_recebidos_legado` (contagem preservada, verificavel por script/assert).
+- [ ] MIG-05: Migracao estritamente aditiva - sem DROP nem rename de tabelas/colunas existentes; colunas legadas (`numero_inicio`, `numero_fim`, `qtd_cartoes_recebidos` do EventoParticipante) permanecem intactas. Verificavel: o schema pos-migracao contem TODAS as colunas pre-migracao (assert via `inspect()`).
 
 ### API (API)
 - [ ] API-01: `GET/POST/PUT/DELETE /eventos/{id}/participantes/{pid}/faixas[/{faixa_id}]` com validacao: numerada exige `fim>=ini` e deriva quantidade; sem_numero exige `quantidade>=1` e zera numeros.
@@ -55,6 +56,7 @@
 | MIG-02 | Fase 1 | Pendente |
 | MIG-03 | Fase 1 | Pendente |
 | MIG-04 | Fase 1 | Pendente |
+| MIG-05 | Fase 1 | Pendente |
 | TEST-01 | Fase 1 | Pendente |
 | TEST-06 | Fase 1 | Pendente |
 | API-01 | Fase 2 | Pendente |
