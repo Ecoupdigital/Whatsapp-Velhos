@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
 from datetime import datetime
 
 from database import get_db
-from models import Evento, EventoParticipante, Jogador, Transacao
+from models import Evento, EventoParticipante, Jogador, Transacao, EventoCartaoFaixa
 from schemas import (
     EventoCreate, EventoUpdate, EventoOut,
     ParticipanteUpdate, ParticipanteOut,
@@ -12,6 +12,7 @@ from schemas import (
     PagamentoCreate, PagamentoOut,
     EventoResumo,
     CartoesUpdate,
+    FaixaCreate, FaixaUpdate, FaixaOut,
 )
 from auth import get_current_user
 
@@ -139,13 +140,19 @@ def adicionar_avulso(evento_id: int, data: ParticipanteAvulsoCreate, db: Session
 
 
 def _proximo_numero(db: Session, evento_id: int) -> int:
-    """Proximo numero disponivel pra cartoes nesse evento."""
-    max_fim = (
+    """Proximo numero disponivel: max entre numero_fim legado (participante) e das faixas."""
+    max_part = (
         db.query(func.max(EventoParticipante.numero_fim))
         .filter(EventoParticipante.evento_id == evento_id)
         .scalar()
     )
-    return (max_fim or 0) + 1
+    max_faixa = (
+        db.query(func.max(EventoCartaoFaixa.numero_fim))
+        .join(EventoParticipante, EventoParticipante.id == EventoCartaoFaixa.evento_participante_id)
+        .filter(EventoParticipante.evento_id == evento_id)
+        .scalar()
+    )
+    return max(max_part or 0, max_faixa or 0) + 1
 
 
 def _recalcular_valor_esperado(p: EventoParticipante, evento: Evento):
@@ -156,6 +163,20 @@ def _recalcular_valor_esperado(p: EventoParticipante, evento: Evento):
             + (p.qtd_pagou_custo or 0) * (evento.custo_cartao or 0)
         )
         p.valor = float(valor)
+
+
+def _recalc_recebidos(p: EventoParticipante):
+    """Recebidos e DERIVADO da soma das faixas. Cliente nunca dita esse valor."""
+    p.qtd_cartoes_recebidos = sum(f.quantidade or 0 for f in p.faixas)
+
+
+def _validar_reconciliacao(p: EventoParticipante):
+    total_destino = (p.qtd_vendidos or 0) + (p.qtd_devolvidos or 0) + (p.qtd_pagou_custo or 0)
+    if total_destino > (p.qtd_cartoes_recebidos or 0):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Soma vendidos+devolvidos+pagou_custo ({total_destino}) excede recebidos ({p.qtd_cartoes_recebidos})",
+        )
 
 
 @router.post("/{evento_id}/popular", response_model=list[ParticipanteOut])
@@ -285,6 +306,125 @@ def remover_participante(evento_id: int, participante_id: int, db: Session = Dep
     db.delete(p)
     db.commit()
     return {"ok": True}
+
+
+# ─── Helpers de participante e faixas ────────────────────────────
+
+def _carregar_participante(db: Session, evento_id: int, participante_id: int) -> EventoParticipante:
+    p = (
+        db.query(EventoParticipante)
+        .options(
+            joinedload(EventoParticipante.evento),
+            joinedload(EventoParticipante.jogador),
+            selectinload(EventoParticipante.faixas),
+            selectinload(EventoParticipante.itens),
+        )
+        .filter(
+            EventoParticipante.id == participante_id,
+            EventoParticipante.evento_id == evento_id,
+        )
+        .first()
+    )
+    if not p:
+        raise HTTPException(status_code=404, detail="Participante nao encontrado")
+    return p
+
+
+def _aplicar_dados_faixa(f: EventoCartaoFaixa, sem_numero: bool, numero_inicio, numero_fim, quantidade):
+    """Valida e seta campos da faixa segundo as regras de dominio (400 em erro)."""
+    if sem_numero:
+        if not quantidade or quantidade < 1:
+            raise HTTPException(status_code=400, detail="Lote sem numero exige quantidade >= 1")
+        f.sem_numero = 1
+        f.numero_inicio = None
+        f.numero_fim = None
+        f.quantidade = quantidade
+    else:
+        if numero_inicio is None or numero_fim is None:
+            raise HTTPException(status_code=400, detail="Faixa numerada exige numero_inicio e numero_fim")
+        if numero_fim < numero_inicio:
+            raise HTTPException(status_code=400, detail="numero_fim deve ser >= numero_inicio")
+        f.sem_numero = 0
+        f.numero_inicio = numero_inicio
+        f.numero_fim = numero_fim
+        f.quantidade = numero_fim - numero_inicio + 1  # servidor recalcula, ignora qtd enviada
+
+
+def _pos_mutacao_faixa(db: Session, p: EventoParticipante):
+    """Cadeia padrao apos mutar faixas: recalc recebidos -> reconciliacao -> valor -> pago -> commit."""
+    db.flush()  # garante que faixas adicionadas/removidas refletem em p.faixas
+    db.refresh(p)
+    _recalc_recebidos(p)
+    _validar_reconciliacao(p)
+    if p.evento:
+        _recalcular_valor_esperado(p, p.evento)
+    p.pago = 1 if p.valor and p.valor_pago and p.valor_pago >= p.valor else 0
+    db.commit()
+    db.refresh(p)
+
+
+# ─── Participante singular (API-10) ──────────────────────────────
+
+@router.get("/{evento_id}/participantes/{participante_id}", response_model=ParticipanteOut)
+def detalhe_participante(evento_id: int, participante_id: int, db: Session = Depends(get_db)):
+    """Refetch granular de UM participante (jogador + faixas + itens). Usado pelo grid inline da Fase 3."""
+    return _carregar_participante(db, evento_id, participante_id)
+
+
+# ─── CRUD de faixas (API-01, API-02, API-08) ─────────────────────
+
+@router.get("/{evento_id}/participantes/{participante_id}/faixas", response_model=list[FaixaOut])
+def listar_faixas(evento_id: int, participante_id: int, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    return (
+        db.query(EventoCartaoFaixa)
+        .filter(EventoCartaoFaixa.evento_participante_id == p.id)
+        .order_by(EventoCartaoFaixa.id)
+        .all()
+    )
+
+
+@router.post("/{evento_id}/participantes/{participante_id}/faixas", response_model=ParticipanteOut, status_code=201)
+def criar_faixa(evento_id: int, participante_id: int, data: FaixaCreate, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    f = EventoCartaoFaixa(evento_participante_id=p.id)
+    _aplicar_dados_faixa(f, data.sem_numero, data.numero_inicio, data.numero_fim, data.quantidade)
+    db.add(f)
+    _pos_mutacao_faixa(db, p)
+    return p
+
+
+@router.put("/{evento_id}/participantes/{participante_id}/faixas/{faixa_id}", response_model=ParticipanteOut)
+def atualizar_faixa(evento_id: int, participante_id: int, faixa_id: int, data: FaixaUpdate, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    f = db.query(EventoCartaoFaixa).filter(
+        EventoCartaoFaixa.id == faixa_id,
+        EventoCartaoFaixa.evento_participante_id == p.id,
+    ).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="Faixa nao encontrada")
+    # merge: valores ausentes no payload mantem o atual da faixa
+    sem_numero = data.sem_numero if data.sem_numero is not None else bool(f.sem_numero)
+    numero_inicio = data.numero_inicio if data.numero_inicio is not None else f.numero_inicio
+    numero_fim = data.numero_fim if data.numero_fim is not None else f.numero_fim
+    quantidade = data.quantidade if data.quantidade is not None else f.quantidade
+    _aplicar_dados_faixa(f, sem_numero, numero_inicio, numero_fim, quantidade)
+    _pos_mutacao_faixa(db, p)
+    return p
+
+
+@router.delete("/{evento_id}/participantes/{participante_id}/faixas/{faixa_id}", response_model=ParticipanteOut)
+def remover_faixa(evento_id: int, participante_id: int, faixa_id: int, db: Session = Depends(get_db)):
+    p = _carregar_participante(db, evento_id, participante_id)
+    f = db.query(EventoCartaoFaixa).filter(
+        EventoCartaoFaixa.id == faixa_id,
+        EventoCartaoFaixa.evento_participante_id == p.id,
+    ).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="Faixa nao encontrada")
+    db.delete(f)
+    _pos_mutacao_faixa(db, p)  # se recebidos < vendidos+dev+custo -> 400 e rollback
+    return p
 
 
 # ─── Pagamentos ───────────────────────────────────────────────────
