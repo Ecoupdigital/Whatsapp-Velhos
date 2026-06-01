@@ -39,6 +39,7 @@ import type {
   ContaOut,
   PagamentoOut,
   EventoResumo,
+  ItemTipo,
 } from "@/types";
 import {
   Button,
@@ -463,6 +464,70 @@ export default function EventoDetailPage() {
       setCartoesSaving(false);
     }
   };
+
+  const refetchParticipante = useCallback(async (pid: number) => {
+    try {
+      const fresh = await api.get<ParticipanteOut>(`/eventos/${eventoId}/participantes/${pid}`);
+      setParticipantes((prev) => prev.map((p) => (p.id === pid ? fresh : p)));
+    } catch {
+      fetchAll();
+    }
+  }, [eventoId, fetchAll]);
+
+  const commitCartaoCampo = useCallback(
+    async (
+      part: ParticipanteOut,
+      campo: "qtd_vendidos" | "qtd_devolvidos" | "qtd_pagou_custo",
+      valor: number
+    ) => {
+      try {
+        await api.put(`/eventos/${eventoId}/participantes/${part.id}/cartoes`, {
+          qtd_vendidos: campo === "qtd_vendidos" ? valor : part.qtd_vendidos,
+          qtd_devolvidos: campo === "qtd_devolvidos" ? valor : part.qtd_devolvidos,
+          qtd_pagou_custo: campo === "qtd_pagou_custo" ? valor : part.qtd_pagou_custo,
+        });
+        await refetchParticipante(part.id);
+        const res = await api.get<EventoResumo>(`/eventos/${eventoId}/resumo`);
+        setResumo(res);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao salvar");
+        throw err; // celula reverte
+      }
+    },
+    [eventoId, refetchParticipante]
+  );
+
+  const commitItemCampo = useCallback(
+    async (
+      part: ParticipanteOut,
+      tipo: string,
+      campo: "qtd_vendido" | "qtd_pedido",
+      valor: number
+    ) => {
+      const tipos = evento?.tipos_item || [];
+      const atuais = new Map(part.itens.map((it) => [it.tipo, it]));
+      const itens: ItemTipo[] = tipos.map((t) => {
+        const cur = atuais.get(t);
+        const base: ItemTipo = {
+          tipo: t,
+          qtd_vendido: cur?.qtd_vendido ?? 0,
+          qtd_pedido: cur?.qtd_pedido ?? 0,
+        };
+        if (t === tipo) base[campo] = valor;
+        return base;
+      });
+      try {
+        await api.put(`/eventos/${eventoId}/participantes/${part.id}/itens`, { itens });
+        await refetchParticipante(part.id);
+        const res = await api.get<EventoResumo>(`/eventos/${eventoId}/resumo`);
+        setResumo(res);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao salvar split");
+        throw err;
+      }
+    },
+    [eventoId, evento, refetchParticipante]
+  );
 
   const handleEditSubmit = async () => {
     if (!editForm.titulo.trim()) {
