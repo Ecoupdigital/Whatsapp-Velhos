@@ -107,6 +107,7 @@ interface EditForm {
   custo_cartao: number;
   qtd_cartoes_padrao_jogador: number;
   qtd_cartoes_padrao_socio: number;
+  tipos_item: string;
 }
 
 function todayISO(): string {
@@ -172,6 +173,7 @@ export default function EventoDetailPage() {
     custo_cartao: 0,
     qtd_cartoes_padrao_jogador: 0,
     qtd_cartoes_padrao_socio: 0,
+    tipos_item: "",
   });
 
   // Cartões modal
@@ -407,6 +409,7 @@ export default function EventoDetailPage() {
       custo_cartao: evento.custo_cartao || 0,
       qtd_cartoes_padrao_jogador: evento.qtd_cartoes_padrao_jogador || 0,
       qtd_cartoes_padrao_socio: evento.qtd_cartoes_padrao_socio || 0,
+      tipos_item: (evento.tipos_item || []).join(", "),
     });
     setEditModalOpen(true);
   };
@@ -484,6 +487,10 @@ export default function EventoDetailPage() {
         custo_cartao: editForm.custo_cartao,
         qtd_cartoes_padrao_jogador: editForm.qtd_cartoes_padrao_jogador,
         qtd_cartoes_padrao_socio: editForm.qtd_cartoes_padrao_socio,
+        tipos_item: editForm.tipos_item
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter((s) => s.length > 0),
       };
       await api.put<EventoOut>(`/eventos/${eventoId}`, payload);
       toast.success("Evento atualizado");
@@ -1325,6 +1332,21 @@ export default function EventoDetailPage() {
             </div>
             <p className="text-xs text-txt-tertiary mt-2 font-body">
               Quando &quot;valor cartao&quot; for definido, o valor cobrado de cada participante e calculado automaticamente: vendidos x valor_cartao + pagou_custo x custo_cartao.
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-border-subtle">
+            <p className="text-xs text-txt-tertiary uppercase tracking-wider font-display mb-2">
+              Tipos de item (Galeto)
+            </p>
+            <Input
+              label="Tipos separados por virgula"
+              placeholder="cru, assado"
+              value={editForm.tipos_item}
+              onChange={(e) => updateEditField("tipos_item", e.target.value)}
+            />
+            <p className="text-xs text-txt-tertiary mt-2 font-body">
+              Define as colunas de split do grid (ex: cru, assado). Deixe vazio para eventos sem split por tipo.
             </p>
           </div>
 
