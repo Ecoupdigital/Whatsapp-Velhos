@@ -20,6 +20,7 @@ Ver PROJECT.md Key Decisions e SYSTEM-DESIGN.md.
 - [01-02]: Import de models dentro de _backfill_faixas (import local) para evitar ciclo de import
 - [01-02]: Faixa numerada usa qtd=fim-ini+1 como fonte de verdade; divergencias com legado aparecem nos testes 01-03
 - [01-02]: run_additive_migrations em escopo de modulo (nao em on_startup) para consistencia com create_all
+- [Phase 3]: Feature entregue na main; deploy roda migracao aditiva no boot; testar com dados reais de producao apos deploy
 
 ### Planos Completos
 - 01-01: Modelos EventoCartaoFaixa, EventoParticipanteItem, coluna tipos_item em Evento (commit do plano anterior)
