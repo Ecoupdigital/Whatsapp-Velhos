@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
+import json
 
 
 # === Auth ===
@@ -265,6 +266,67 @@ class EventoOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class FaixaCreate(BaseModel):
+    sem_numero: bool = False
+    numero_inicio: Optional[int] = None
+    numero_fim: Optional[int] = None
+    quantidade: Optional[int] = None  # usado so quando sem_numero=True
+
+
+class FaixaUpdate(BaseModel):
+    sem_numero: Optional[bool] = None
+    numero_inicio: Optional[int] = None
+    numero_fim: Optional[int] = None
+    quantidade: Optional[int] = None
+
+
+class FaixaOut(BaseModel):
+    id: int
+    evento_participante_id: int
+    numero_inicio: Optional[int] = None
+    numero_fim: Optional[int] = None
+    quantidade: int
+    sem_numero: bool
+    created_at: Optional[str] = None
+
+    @field_validator("sem_numero", mode="before")
+    @classmethod
+    def _coerce_sem_numero(cls, v):
+        # banco guarda Integer 0/1; expor como bool
+        if isinstance(v, int):
+            return bool(v)
+        return v
+
+    class Config:
+        from_attributes = True
+
+
+class ItemTipo(BaseModel):
+    tipo: str
+    qtd_vendido: int = 0
+    qtd_pedido: int = 0
+
+
+class ItensUpdate(BaseModel):
+    itens: list[ItemTipo] = []
+
+
+class ItemOut(BaseModel):
+    id: int
+    tipo: str
+    qtd_vendido: int
+    qtd_pedido: int
+
+    class Config:
+        from_attributes = True
+
+
+class ResumoItemTipo(BaseModel):
+    tipo: str
+    total_vendido: int
+    total_pedido: int
+
 
 class ParticipanteUpdate(BaseModel):
     jogador_id: Optional[int] = None
