@@ -225,6 +225,7 @@ class EventoCreate(BaseModel):
     custo_cartao: float = 0
     qtd_cartoes_padrao_jogador: int = 0
     qtd_cartoes_padrao_socio: int = 0
+    tipos_item: Optional[list[str]] = None
 
 class EventoUpdate(BaseModel):
     tipo: Optional[str] = None
@@ -243,6 +244,7 @@ class EventoUpdate(BaseModel):
     custo_cartao: Optional[float] = None
     qtd_cartoes_padrao_jogador: Optional[int] = None
     qtd_cartoes_padrao_socio: Optional[int] = None
+    tipos_item: Optional[list[str]] = None
 
 class EventoOut(BaseModel):
     id: int
@@ -263,6 +265,20 @@ class EventoOut(BaseModel):
     qtd_cartoes_padrao_jogador: int = 0
     qtd_cartoes_padrao_socio: int = 0
     created_at: Optional[str]
+    tipos_item: Optional[list[str]] = None
+
+    @field_validator("tipos_item", mode="before")
+    @classmethod
+    def _parse_tipos_item(cls, v):
+        # banco guarda Text JSON ('["cru","assado"]') ou None/""
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (ValueError, TypeError):
+                return None
+        return v  # ja e list (vindo de payload, nao do banco)
 
     class Config:
         from_attributes = True
@@ -372,6 +388,7 @@ class EventoResumo(BaseModel):
     cartoes_devolvidos: int = 0
     cartoes_pagou_custo: int = 0
     proximo_numero: int = 1
+    itens_por_tipo: list["ResumoItemTipo"] = []
 
 class CartoesUpdate(BaseModel):
     qtd_cartoes_recebidos: Optional[int] = None
@@ -401,6 +418,8 @@ class ParticipanteOut(BaseModel):
     qtd_pagou_custo: int = 0
     observacoes: Optional[str]
     jogador: Optional[JogadorOut] = None
+    faixas: list["FaixaOut"] = []
+    itens: list["ItemOut"] = []
 
     class Config:
         from_attributes = True
