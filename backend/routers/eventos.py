@@ -260,10 +260,16 @@ def atualizar_cartoes(
     data: CartoesUpdate,
     db: Session = Depends(get_db),
 ):
-    """Atualiza cartoes do participante e recalcula valor esperado."""
+    """Atualiza vendas/devolucao/custo e recalcula valor.
+    recebidos e DERIVADO das faixas: campos qtd_cartoes_recebidos/numero_inicio/numero_fim
+    do payload sao IGNORADOS (retrocompat: aceitos no schema mas nao aplicados)."""
     p = (
         db.query(EventoParticipante)
-        .options(joinedload(EventoParticipante.evento), joinedload(EventoParticipante.jogador))
+        .options(
+            joinedload(EventoParticipante.evento),
+            joinedload(EventoParticipante.jogador),
+            selectinload(EventoParticipante.faixas),
+        )
         .filter(
             EventoParticipante.id == participante_id,
             EventoParticipante.evento_id == evento_id,
@@ -274,33 +280,18 @@ def atualizar_cartoes(
         raise HTTPException(status_code=404, detail="Participante nao encontrado")
 
     payload = data.model_dump(exclude_unset=True)
+    # campos de venda/devolucao/custo sao os unicos aplicaveis aqui
+    for field in ("qtd_vendidos", "qtd_devolvidos", "qtd_pagou_custo"):
+        if field in payload and payload[field] is not None:
+            setattr(p, field, payload[field])
+    # qtd_cartoes_recebidos / numero_inicio / numero_fim do payload sao ignorados (derivado de faixas)
 
-    # Auto-ajusta numero_fim se mudou qtd_recebidos e tem numero_inicio
-    if "qtd_cartoes_recebidos" in payload:
-        novo_qtd = payload["qtd_cartoes_recebidos"] or 0
-        if novo_qtd > 0 and p.numero_inicio is None and "numero_inicio" not in payload:
-            # Auto-numerar a partir do proximo disponivel
-            proximo = _proximo_numero(db, evento_id)
-            payload["numero_inicio"] = proximo
-            payload["numero_fim"] = proximo + novo_qtd - 1
-        elif novo_qtd > 0 and p.numero_inicio is not None and "numero_fim" not in payload:
-            payload["numero_fim"] = p.numero_inicio + novo_qtd - 1
-
-    for field, value in payload.items():
-        setattr(p, field, value)
-
-    # Validacao reconciliacao: vendidos + devolvidos + pagou_custo <= recebidos
-    total_destino = (p.qtd_vendidos or 0) + (p.qtd_devolvidos or 0) + (p.qtd_pagou_custo or 0)
-    if total_destino > (p.qtd_cartoes_recebidos or 0):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Soma vendidos+devolvidos+pagou_custo ({total_destino}) excede recebidos ({p.qtd_cartoes_recebidos})",
-        )
+    _recalc_recebidos(p)
+    _validar_reconciliacao(p)
 
     if p.evento:
         _recalcular_valor_esperado(p, p.evento)
 
-    # Recalcula status pago derivado
     p.pago = 1 if p.valor and p.valor_pago and p.valor_pago >= p.valor else 0
 
     db.commit()
