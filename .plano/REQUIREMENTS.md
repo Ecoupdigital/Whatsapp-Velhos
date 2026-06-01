@@ -27,6 +27,7 @@
 - [ ] API-07: `EventoCreate/Update/Out` aceitam/retornam `tipos_item: list[str]`; escrita serializa json.dumps, leitura desserializa via field_validator; `PUT /eventos/{id}` salva tipos.
 - [ ] API-08: `_proximo_numero` passa a considerar `max(numero_fim)` tambem das faixas.
 - [ ] API-09: `ParticipanteOut` inclui `faixas: list[FaixaOut]` e `itens: list[ItemOut]`.
+- [ ] API-10: `GET /eventos/{id}/participantes/{pid}` (SINGULAR) retorna `ParticipanteOut` completo (jogador + faixas + itens) para refetch granular de uma linha do grid (Fase 3 / 03-04 `refetchParticipante`). Colecoes via `selectinload`. Fecha handoff INC-001.
 
 ### Frontend (UI)
 - [ ] UI-01: Grid inline (tabela planilha) de participantes na tela `/eventos/[id]`: colunas editaveis in-place com autosave (blur/Enter), recalculo otimista e revert em erro 400.
@@ -68,6 +69,7 @@
 | API-07 | Fase 2 | Pendente |
 | API-08 | Fase 2 | Pendente |
 | API-09 | Fase 2 | Pendente |
+| API-10 | Fase 2 | Pendente |
 | TEST-02 | Fase 2 | Pendente |
 | TEST-03 | Fase 2 | Pendente |
 | UI-01 | Fase 3 | Pendente |

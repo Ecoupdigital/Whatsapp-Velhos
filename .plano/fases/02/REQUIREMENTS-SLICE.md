@@ -30,6 +30,9 @@ Considerar `max(numero_fim)` tanto de `EventoParticipante` (legado) quanto de `E
 ## API-09: ParticipanteOut
 Incluir `faixas: list[FaixaOut] = []` e `itens: list[ItemOut] = []`. Schemas novos: `FaixaCreate/Update/Out`, `ItemTipo/ItensUpdate/ItemOut`, `ResumoItemTipo`.
 
+## API-10: GET participante singular (refetch)
+`GET /eventos/{id}/participantes/{pid}` (SINGULAR, auth, 404 se nao bate evento) retorna `ParticipanteOut` completo (jogador + faixas + itens). Suporta o `refetchParticipante` do grid inline da Fase 3 (03-04): apos editar uma celula, revalida apenas aquela linha em vez de refetch global da lista. Carregar colecoes com `selectinload` (evita produto cartesiano). Adicionado para fechar handoff INC-001 (Fase 3 consumia endpoint inexistente).
+
 ## TEST-02: Faixas quebradas
 Adicionar 1-12 e depois 45-50 + lote sem numero a um jogador; `qtd_cartoes_recebidos` soma certo.
 
