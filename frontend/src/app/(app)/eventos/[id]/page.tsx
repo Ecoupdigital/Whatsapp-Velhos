@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Calendar,
@@ -10,7 +10,6 @@ import {
   Users,
   Plus,
   Check,
-  X,
   DollarSign,
   Plane,
   Music,
@@ -23,7 +22,6 @@ import {
   AlertTriangle,
   RotateCcw,
   UserPlus,
-  ChevronDown,
   Ticket,
   Flame,
 } from "lucide-react";
@@ -52,6 +50,7 @@ import {
   ModalFooter,
   EmptyState,
 } from "@/components/ui";
+import { ParticipantesGrid } from "@/components/eventos/ParticipantesGrid";
 
 /* ─── Constants ──────────────────────────────────────────────── */
 
@@ -414,19 +413,6 @@ export default function EventoDetailPage() {
       tipos_item: (evento.tipos_item || []).join(", "),
     });
     setEditModalOpen(true);
-  };
-
-  const openCartoesModal = (part: ParticipanteOut) => {
-    setCartoesParticipante(part);
-    setCartoesForm({
-      qtd_cartoes_recebidos: String(part.qtd_cartoes_recebidos || 0),
-      numero_inicio: part.numero_inicio != null ? String(part.numero_inicio) : "",
-      numero_fim: part.numero_fim != null ? String(part.numero_fim) : "",
-      qtd_vendidos: String(part.qtd_vendidos || 0),
-      qtd_devolvidos: String(part.qtd_devolvidos || 0),
-      qtd_pagou_custo: String(part.qtd_pagou_custo || 0),
-    });
-    setCartoesModalOpen(true);
   };
 
   const handleSaveCartoes = async () => {
@@ -996,160 +982,41 @@ export default function EventoDetailPage() {
               }
             />
           ) : (
-            <div className="space-y-2">
-              <AnimatePresence>
-                {filtered.map((part, idx) => {
-                  const status = pStatusDerivado(part);
-                  const statusColor =
-                    status === "pago"
-                      ? "text-emerald-400 bg-emerald-500/15"
-                      : status === "parcial"
-                      ? "text-blue-400 bg-blue-500/15"
-                      : "text-yellow-400 bg-yellow-500/15";
-                  const isExpanded = expandedParticipanteId === part.id;
-                  const histPagamentos = pagamentos.filter(
-                    (pg) => pg.evento_participante_id === part.id
-                  );
-                  const tipo = part.jogador?.tipo || (part.jogador_id ? "jogador" : "convidado");
-
-                  return (
-                    <motion.div
-                      key={part.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 10 }}
-                      transition={{ delay: idx * 0.02 }}
-                      className="border border-border-subtle rounded-lg bg-surface-card overflow-hidden"
-                    >
-                      <div className="flex items-center gap-3 p-3">
-                        <div className="h-9 w-9 rounded-full bg-surface-tertiary border border-border-subtle flex items-center justify-center shrink-0">
-                          <span className="text-xs font-semibold text-txt-secondary font-display">
-                            {nomeParticipante(part).charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-medium text-txt-primary font-body truncate">
-                              {nomeParticipante(part)}
-                            </p>
-                            <span className={cn(
-                              "px-1.5 py-0.5 rounded text-[10px] font-medium uppercase",
-                              tipo === "socio" ? "bg-purple-500/15 text-purple-400" :
-                              tipo === "convidado" ? "bg-amber-500/15 text-amber-400" :
-                              "bg-brand-red/15 text-brand-red"
-                            )}>
-                              {tipo}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-txt-tertiary font-mono flex-wrap">
-                            <span>
-                              {formatCurrency(part.valor_pago || 0)} / {formatCurrency(part.valor || 0)}
-                            </span>
-                            {part.qtd_cartoes_recebidos > 0 && (
-                              <span className="text-blue-400">
-                                <Ticket size={10} className="inline mr-1" />
-                                {part.qtd_vendidos}/{part.qtd_cartoes_recebidos}
-                                {part.numero_inicio != null && part.numero_fim != null && (
-                                  <span className="text-txt-tertiary ml-1">
-                                    ({part.numero_inicio}-{part.numero_fim})
-                                  </span>
-                                )}
-                              </span>
-                            )}
-                            {contaNome(part.conta_id) && (
-                              <span className="text-txt-secondary">{contaNome(part.conta_id)}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        <span className={cn(
-                          "px-2 py-1 rounded-full text-xs font-medium uppercase",
-                          statusColor
-                        )}>
-                          {status}
-                        </span>
-
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={<Ticket size={14} />}
-                          onClick={() => openCartoesModal(part)}
-                        >
-                          Cartoes
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          icon={<DollarSign size={14} />}
-                          onClick={() => openPayModal(part)}
-                          disabled={status === "pago"}
-                        >
-                          Pagar
-                        </Button>
-
-                        <button
-                          onClick={() => setExpandedParticipanteId(isExpanded ? null : part.id)}
-                          className="h-8 w-8 rounded-lg flex items-center justify-center text-txt-tertiary hover:text-txt-primary hover:bg-surface-tertiary transition-colors"
-                          title="Historico"
-                        >
-                          <ChevronDown size={16} className={cn("transition-transform", isExpanded && "rotate-180")} />
-                        </button>
-
-                        <button
-                          onClick={() => handleRemoverParticipante(part)}
-                          className="h-8 w-8 rounded-lg flex items-center justify-center text-txt-tertiary hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Remover do evento"
-                        >
-                          <X size={14} />
+            <ParticipantesGrid
+              participantes={filtered}
+              evento={evento}
+              expandedId={expandedParticipanteId}
+              onToggleExpand={(id) => setExpandedParticipanteId(expandedParticipanteId === id ? null : id)}
+              onPay={openPayModal}
+              onRemove={handleRemoverParticipante}
+              commitCartaoCampo={commitCartaoCampo}
+              commitItemCampo={commitItemCampo}
+              nomeParticipante={nomeParticipante}
+              statusDerivado={pStatusDerivado}
+              renderExpanded={(p) => {
+                const hist = pagamentos.filter((pg) => pg.evento_participante_id === p.id);
+                if (hist.length === 0) {
+                  return <p className="text-xs text-txt-tertiary font-body py-1">Sem pagamentos registrados</p>;
+                }
+                return (
+                  <div className="space-y-1">
+                    <p className="text-xs text-txt-tertiary uppercase tracking-wider font-body mb-1">Historico</p>
+                    {hist.map((pg) => (
+                      <div key={pg.id} className="flex items-center gap-3 text-xs py-1 px-2 rounded hover:bg-surface-card">
+                        <span className="font-mono text-txt-secondary">{pg.data}</span>
+                        <span className="font-mono text-emerald-400">{formatCurrency(pg.valor)}</span>
+                        {pg.forma_pagto && <span className="text-txt-tertiary uppercase">{pg.forma_pagto}</span>}
+                        {contaNome(pg.conta_id) && <span className="text-txt-secondary">{contaNome(pg.conta_id)}</span>}
+                        <div className="flex-1" />
+                        <button onClick={() => handleEstornar(pg.id)} className="text-txt-tertiary hover:text-red-400" title="Estornar">
+                          <RotateCcw size={12} />
                         </button>
                       </div>
-
-                      {isExpanded && (
-                        <div className="border-t border-border-subtle bg-surface-secondary/40 px-3 py-2">
-                          {histPagamentos.length === 0 ? (
-                            <p className="text-xs text-txt-tertiary font-body py-2">
-                              Sem pagamentos registrados
-                            </p>
-                          ) : (
-                            <div className="space-y-1">
-                              <p className="text-xs text-txt-tertiary uppercase tracking-wider font-body mb-2">
-                                Historico
-                              </p>
-                              {histPagamentos.map((pg) => (
-                                <div
-                                  key={pg.id}
-                                  className="flex items-center gap-3 text-xs py-1.5 px-2 rounded hover:bg-surface-card"
-                                >
-                                  <span className="font-mono text-txt-secondary">{pg.data}</span>
-                                  <span className="font-mono text-emerald-400">
-                                    {formatCurrency(pg.valor)}
-                                  </span>
-                                  {pg.forma_pagto && (
-                                    <span className="text-txt-tertiary uppercase">{pg.forma_pagto}</span>
-                                  )}
-                                  {contaNome(pg.conta_id) && (
-                                    <span className="text-txt-secondary">{contaNome(pg.conta_id)}</span>
-                                  )}
-                                  <div className="flex-1" />
-                                  <button
-                                    onClick={() => handleEstornar(pg.id)}
-                                    className="text-txt-tertiary hover:text-red-400 transition-colors"
-                                    title="Estornar"
-                                  >
-                                    <RotateCcw size={12} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
+                    ))}
+                  </div>
+                );
+              }}
+            />
           )}
         </Card>
       </motion.div>
