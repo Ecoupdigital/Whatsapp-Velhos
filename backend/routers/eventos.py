@@ -40,7 +40,10 @@ def listar(
 
 @router.post("", response_model=EventoOut, status_code=201)
 def criar(data: EventoCreate, db: Session = Depends(get_db)):
-    e = Evento(**data.model_dump())
+    payload = data.model_dump()
+    if payload.get("tipos_item") is not None:
+        payload["tipos_item"] = json.dumps(payload["tipos_item"])
+    e = Evento(**payload)
     db.add(e)
     db.commit()
     db.refresh(e)
@@ -60,7 +63,10 @@ def atualizar(evento_id: int, data: EventoUpdate, db: Session = Depends(get_db))
     e = db.query(Evento).filter(Evento.id == evento_id).first()
     if not e:
         raise HTTPException(status_code=404, detail="Evento nao encontrado")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    if "tipos_item" in updates:
+        updates["tipos_item"] = json.dumps(updates["tipos_item"]) if updates["tipos_item"] is not None else None
+    for field, value in updates.items():
         setattr(e, field, value)
     db.commit()
     db.refresh(e)
