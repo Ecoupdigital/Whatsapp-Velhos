@@ -1,10 +1,12 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
 from datetime import datetime
 
 from database import get_db
-from models import Evento, EventoParticipante, Jogador, Transacao, EventoCartaoFaixa
+from models import Evento, EventoParticipante, EventoParticipanteItem, Jogador, Transacao, EventoCartaoFaixa
 from schemas import (
     EventoCreate, EventoUpdate, EventoOut,
     ParticipanteUpdate, ParticipanteOut,
@@ -13,6 +15,7 @@ from schemas import (
     EventoResumo,
     CartoesUpdate,
     FaixaCreate, FaixaUpdate, FaixaOut,
+    ItensUpdate, ItemOut,
 )
 from auth import get_current_user
 
@@ -328,6 +331,18 @@ def _carregar_participante(db: Session, evento_id: int, participante_id: int) ->
     if not p:
         raise HTTPException(status_code=404, detail="Participante nao encontrado")
     return p
+
+
+def _tipos_do_evento(evento: Evento) -> list[str]:
+    """Desserializa tipos_item do evento (Text JSON). Retorna lista vazia se ausente/invalido."""
+    raw = getattr(evento, "tipos_item", None)
+    if not raw:
+        return []
+    try:
+        val = json.loads(raw) if isinstance(raw, str) else raw
+        return val if isinstance(val, list) else []
+    except (ValueError, TypeError):
+        return []
 
 
 def _aplicar_dados_faixa(f: EventoCartaoFaixa, sem_numero: bool, numero_inicio, numero_fim, quantidade):
