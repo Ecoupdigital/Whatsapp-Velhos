@@ -190,7 +190,8 @@ def _validar_reconciliacao(p: EventoParticipante):
 
 @router.post("/{evento_id}/popular", response_model=list[ParticipanteOut])
 def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
-    """Adiciona todos jogadores ativos ao evento com valor + cartoes padrao."""
+    """Adiciona todos jogadores ativos ao evento. Cartoes via 1 faixa numerada por jogador (qtd>0).
+    Recebidos e DERIVADO da soma das faixas (nao setado inline)."""
     e = db.query(Evento).filter(Evento.id == evento_id).first()
     if not e:
         raise HTTPException(status_code=404, detail="Evento nao encontrado")
@@ -209,19 +210,10 @@ def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
         is_socio = j.tipo == "socio"
         qtd = (e.qtd_cartoes_padrao_socio if is_socio else e.qtd_cartoes_padrao_jogador) or 0
 
-        # Valor padrao: por valor fixo OU por cartoes (se valor_cartao definido)
         if e.valor_cartao and qtd > 0:
-            # Valor presume que vai vender tudo
             valor = qtd * e.valor_cartao
         else:
             valor = (e.valor_socio if is_socio else e.valor_jogador) or 0
-
-        numero_ini = None
-        numero_f = None
-        if qtd > 0:
-            numero_ini = proximo
-            numero_f = proximo + qtd - 1
-            proximo = numero_f + 1
 
         p = EventoParticipante(
             evento_id=evento_id,
@@ -230,11 +222,26 @@ def popular_elenco(evento_id: int, db: Session = Depends(get_db)):
             valor_pago=0,
             status="pendente",
             pago=0,
-            qtd_cartoes_recebidos=qtd,
-            numero_inicio=numero_ini,
-            numero_fim=numero_f,
+            qtd_cartoes_recebidos=0,  # derivado das faixas abaixo
         )
         db.add(p)
+        db.flush()  # garante p.id para a FK da faixa
+
+        if qtd > 0:
+            numero_ini = proximo
+            numero_f = proximo + qtd - 1
+            proximo = numero_f + 1
+            db.add(EventoCartaoFaixa(
+                evento_participante_id=p.id,
+                numero_inicio=numero_ini,
+                numero_fim=numero_f,
+                quantidade=qtd,
+                sem_numero=0,
+            ))
+            db.flush()
+            db.refresh(p)
+            _recalc_recebidos(p)
+
     db.commit()
 
     return (
