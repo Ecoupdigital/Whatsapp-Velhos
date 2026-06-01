@@ -12,7 +12,7 @@ from schemas import (
     ParticipanteUpdate, ParticipanteOut,
     ParticipanteAvulsoCreate,
     PagamentoCreate, PagamentoOut,
-    EventoResumo,
+    EventoResumo, ResumoItemTipo,
     CartoesUpdate,
     FaixaCreate, FaixaUpdate, FaixaOut,
     ItensUpdate, ItemOut,
@@ -653,6 +653,22 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
     cartoes_pagou_custo = sum(p.qtd_pagou_custo or 0 for p in parts)
     proximo_num = _proximo_numero(db, evento_id)
 
+    rows = (
+        db.query(
+            EventoParticipanteItem.tipo,
+            func.coalesce(func.sum(EventoParticipanteItem.qtd_vendido), 0),
+            func.coalesce(func.sum(EventoParticipanteItem.qtd_pedido), 0),
+        )
+        .join(EventoParticipante, EventoParticipante.id == EventoParticipanteItem.evento_participante_id)
+        .filter(EventoParticipante.evento_id == evento_id)
+        .group_by(EventoParticipanteItem.tipo)
+        .all()
+    )
+    itens_por_tipo = [
+        ResumoItemTipo(tipo=t, total_vendido=int(v or 0), total_pedido=int(ped or 0))
+        for (t, v, ped) in rows
+    ]
+
     return EventoResumo(
         total_participantes=len(parts),
         pagos=pagos,
@@ -667,4 +683,5 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
         cartoes_devolvidos=cartoes_devolvidos,
         cartoes_pagou_custo=cartoes_pagou_custo,
         proximo_numero=proximo_num,
+        itens_por_tipo=itens_por_tipo,
     )
