@@ -51,6 +51,7 @@ import {
   EmptyState,
 } from "@/components/ui";
 import { ParticipantesGrid } from "@/components/eventos/ParticipantesGrid";
+import { FaixasPanel } from "@/components/eventos/FaixasPanel";
 
 /* ─── Constants ──────────────────────────────────────────────── */
 
@@ -176,19 +177,6 @@ export default function EventoDetailPage() {
     qtd_cartoes_padrao_socio: 0,
     tipos_item: "",
   });
-
-  // Cartões modal
-  const [cartoesModalOpen, setCartoesModalOpen] = useState(false);
-  const [cartoesParticipante, setCartoesParticipante] = useState<ParticipanteOut | null>(null);
-  const [cartoesForm, setCartoesForm] = useState({
-    qtd_cartoes_recebidos: "",
-    numero_inicio: "",
-    numero_fim: "",
-    qtd_vendidos: "",
-    qtd_devolvidos: "",
-    qtd_pagou_custo: "",
-  });
-  const [cartoesSaving, setCartoesSaving] = useState(false);
 
   // Delete event
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -413,42 +401,6 @@ export default function EventoDetailPage() {
       tipos_item: (evento.tipos_item || []).join(", "),
     });
     setEditModalOpen(true);
-  };
-
-  const handleSaveCartoes = async () => {
-    if (!cartoesParticipante) return;
-    const recebidos = parseInt(cartoesForm.qtd_cartoes_recebidos) || 0;
-    const vendidos = parseInt(cartoesForm.qtd_vendidos) || 0;
-    const devolvidos = parseInt(cartoesForm.qtd_devolvidos) || 0;
-    const pagouCusto = parseInt(cartoesForm.qtd_pagou_custo) || 0;
-
-    if (vendidos + devolvidos + pagouCusto > recebidos) {
-      toast.error("Soma vendidos+devolvidos+pagou_custo nao pode exceder recebidos");
-      return;
-    }
-
-    try {
-      setCartoesSaving(true);
-      await api.put(
-        `/eventos/${eventoId}/participantes/${cartoesParticipante.id}/cartoes`,
-        {
-          qtd_cartoes_recebidos: recebidos,
-          numero_inicio: cartoesForm.numero_inicio ? parseInt(cartoesForm.numero_inicio) : null,
-          numero_fim: cartoesForm.numero_fim ? parseInt(cartoesForm.numero_fim) : null,
-          qtd_vendidos: vendidos,
-          qtd_devolvidos: devolvidos,
-          qtd_pagou_custo: pagouCusto,
-        }
-      );
-      toast.success("Cartoes atualizados");
-      setCartoesModalOpen(false);
-      setCartoesParticipante(null);
-      fetchAll();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Erro ao salvar cartoes");
-    } finally {
-      setCartoesSaving(false);
-    }
   };
 
   const refetchParticipante = useCallback(async (pid: number) => {
@@ -995,24 +947,41 @@ export default function EventoDetailPage() {
               statusDerivado={pStatusDerivado}
               renderExpanded={(p) => {
                 const hist = pagamentos.filter((pg) => pg.evento_participante_id === p.id);
-                if (hist.length === 0) {
-                  return <p className="text-xs text-txt-tertiary font-body py-1">Sem pagamentos registrados</p>;
-                }
                 return (
-                  <div className="space-y-1">
-                    <p className="text-xs text-txt-tertiary uppercase tracking-wider font-body mb-1">Historico</p>
-                    {hist.map((pg) => (
-                      <div key={pg.id} className="flex items-center gap-3 text-xs py-1 px-2 rounded hover:bg-surface-card">
-                        <span className="font-mono text-txt-secondary">{pg.data}</span>
-                        <span className="font-mono text-emerald-400">{formatCurrency(pg.valor)}</span>
-                        {pg.forma_pagto && <span className="text-txt-tertiary uppercase">{pg.forma_pagto}</span>}
-                        {contaNome(pg.conta_id) && <span className="text-txt-secondary">{contaNome(pg.conta_id)}</span>}
-                        <div className="flex-1" />
-                        <button onClick={() => handleEstornar(pg.id)} className="text-txt-tertiary hover:text-red-400" title="Estornar">
-                          <RotateCcw size={12} />
-                        </button>
-                      </div>
-                    ))}
+                  <div className="space-y-3">
+                    <FaixasPanel
+                      eventoId={eventoId}
+                      participante={p}
+                      onMutated={(atualizado) => {
+                        if (atualizado) {
+                          setParticipantes((prev) => prev.map((x) => (x.id === atualizado.id ? atualizado : x)));
+                        } else {
+                          refetchParticipante(p.id);
+                        }
+                        api.get<EventoResumo>(`/eventos/${eventoId}/resumo`).then(setResumo).catch(() => {});
+                      }}
+                    />
+                    <div className="border-t border-border-subtle pt-2">
+                      {hist.length === 0 ? (
+                        <p className="text-xs text-txt-tertiary font-body py-1">Sem pagamentos registrados</p>
+                      ) : (
+                        <div className="space-y-1">
+                          <p className="text-xs text-txt-tertiary uppercase tracking-wider font-body mb-1">Historico</p>
+                          {hist.map((pg) => (
+                            <div key={pg.id} className="flex items-center gap-3 text-xs py-1 px-2 rounded hover:bg-surface-card">
+                              <span className="font-mono text-txt-secondary">{pg.data}</span>
+                              <span className="font-mono text-emerald-400">{formatCurrency(pg.valor)}</span>
+                              {pg.forma_pagto && <span className="text-txt-tertiary uppercase">{pg.forma_pagto}</span>}
+                              {contaNome(pg.conta_id) && <span className="text-txt-secondary">{contaNome(pg.conta_id)}</span>}
+                              <div className="flex-1" />
+                              <button onClick={() => handleEstornar(pg.id)} className="text-txt-tertiary hover:text-red-400" title="Estornar">
+                                <RotateCcw size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               }}
@@ -1132,86 +1101,6 @@ export default function EventoDetailPage() {
           </Button>
           <Button loading={paySaving} onClick={handleRegistrarPagamento}>
             Registrar
-          </Button>
-        </ModalFooter>
-      </Modal>
-
-      {/* ── Cartões Modal ────────────────────────────────────── */}
-      <Modal open={cartoesModalOpen} onClose={() => setCartoesModalOpen(false)} size="md">
-        <ModalHeader>
-          Cartoes - {cartoesParticipante ? nomeParticipante(cartoesParticipante) : ""}
-        </ModalHeader>
-        <ModalBody className="space-y-3">
-          {evento && (
-            <div className="text-xs text-txt-tertiary font-body bg-surface-secondary p-3 rounded-lg">
-              <p>Valor cartao: <span className="font-mono text-txt-secondary">{formatCurrency(evento.valor_cartao || 0)}</span></p>
-              <p>Custo cartao: <span className="font-mono text-txt-secondary">{formatCurrency(evento.custo_cartao || 0)}</span></p>
-              {resumo && (
-                <p className="mt-1">Proximo numero disponivel: <span className="font-mono text-txt-secondary">{resumo.proximo_numero}</span></p>
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-3 gap-3">
-            <Input
-              label="Recebidos"
-              type="number"
-              min={0}
-              value={cartoesForm.qtd_cartoes_recebidos}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_cartoes_recebidos: e.target.value }))}
-            />
-            <Input
-              label="Numero inicial"
-              type="number"
-              min={0}
-              value={cartoesForm.numero_inicio}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, numero_inicio: e.target.value }))}
-            />
-            <Input
-              label="Numero final"
-              type="number"
-              min={0}
-              value={cartoesForm.numero_fim}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, numero_fim: e.target.value }))}
-            />
-          </div>
-
-          <p className="text-xs text-txt-tertiary uppercase tracking-wider font-display pt-2">
-            Reconciliacao
-          </p>
-          <div className="grid grid-cols-3 gap-3">
-            <Input
-              label="Vendidos"
-              type="number"
-              min={0}
-              value={cartoesForm.qtd_vendidos}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_vendidos: e.target.value }))}
-            />
-            <Input
-              label="Devolvidos"
-              type="number"
-              min={0}
-              value={cartoesForm.qtd_devolvidos}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_devolvidos: e.target.value }))}
-            />
-            <Input
-              label="Pagou custo"
-              type="number"
-              min={0}
-              value={cartoesForm.qtd_pagou_custo}
-              onChange={(e) => setCartoesForm((p) => ({ ...p, qtd_pagou_custo: e.target.value }))}
-            />
-          </div>
-          <p className="text-xs text-txt-tertiary font-body">
-            Soma deve fechar com Recebidos. Devolvidos nao pagam. Pagou custo paga apenas o custo (R$ {(evento?.custo_cartao || 0).toFixed(2)}).
-          </p>
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => setCartoesModalOpen(false)}>
-            Cancelar
-          </Button>
-          <Button loading={cartoesSaving} onClick={handleSaveCartoes}>
-            Salvar
           </Button>
         </ModalFooter>
       </Modal>
