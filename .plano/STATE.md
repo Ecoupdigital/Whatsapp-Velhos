@@ -16,6 +16,7 @@
 
 ### Decisoes
 Ver PROJECT.md Key Decisions e SYSTEM-DESIGN.md.
+- [Phase 0]: Migracao so aditiva no boot, sistema B (CartaoBaile) fora de escopo, grid inline estilo planilha
 
 ### Bloqueios
 Nenhum
