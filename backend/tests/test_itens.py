@@ -10,17 +10,29 @@ def _set_vendidos(TestingSession, pid, n):
     db.close()
 
 
-def test_split_que_nao_fecha_400(client, participante, TestingSession):
-    # TEST-03: vendidos=10, split cru=4 + assado=4 = 8 != 10 -> 400
+def test_split_parcial_ok(client, participante, TestingSession):
+    # TEST-03: vendidos=10, split parcial cru=7 + assado=0 = 7 <= 10 -> 200 (faltam 3, OK)
     evento_id, pid = participante
     _set_vendidos(TestingSession, pid, 10)
     url = f"/api/eventos/{evento_id}/participantes/{pid}/itens"
     r = client.put(url, json={"itens": [
-        {"tipo": "cru", "qtd_vendido": 4, "qtd_pedido": 0},
-        {"tipo": "assado", "qtd_vendido": 4, "qtd_pedido": 0},
+        {"tipo": "cru", "qtd_vendido": 7, "qtd_pedido": 0},
+    ]})
+    assert r.status_code == 200, r.text
+    assert {i["tipo"]: i["qtd_vendido"] for i in r.json()["itens"]}["cru"] == 7
+
+
+def test_split_que_excede_400(client, participante, TestingSession):
+    # vendidos=10, split cru=8 + assado=6 = 14 > 10 -> 400 (so bloqueia se passar)
+    evento_id, pid = participante
+    _set_vendidos(TestingSession, pid, 10)
+    url = f"/api/eventos/{evento_id}/participantes/{pid}/itens"
+    r = client.put(url, json={"itens": [
+        {"tipo": "cru", "qtd_vendido": 8, "qtd_pedido": 0},
+        {"tipo": "assado", "qtd_vendido": 6, "qtd_pedido": 0},
     ]})
     assert r.status_code == 400, r.text
-    assert "8" in r.json()["detail"] and "10" in r.json()["detail"]
+    assert "14" in r.json()["detail"] and "10" in r.json()["detail"]
 
 
 def test_split_que_fecha_persiste(client, participante, TestingSession):

@@ -476,7 +476,7 @@ def atualizar_itens(
 
     - Valida que cada tipo pertence a evento.tipos_item (se o evento define tipos).
     - Upsert por (participante, tipo); tipos omitidos no payload sao REMOVIDOS.
-    - Fechamento: sum(qtd_vendido) deve ser igual a p.qtd_vendidos (400 senao).
+    - Split parcial OK: sum(qtd_vendido) NAO pode EXCEDER p.qtd_vendidos (400 so se passar).
     - qtd_pedido e livre (sem validacao de soma).
     """
     p = _carregar_participante(db, evento_id, participante_id)
@@ -495,12 +495,12 @@ def atualizar_itens(
             raise HTTPException(status_code=400, detail=f"Tipo '{it.tipo}' duplicado no payload")
         vistos.add(it.tipo)
 
-    # 2. Validar fechamento de vendidos
+    # 2. Split parcial permitido: soma por tipo nao pode EXCEDER os vendidos
     soma_vendido = sum(it.qtd_vendido or 0 for it in data.itens)
-    if soma_vendido != (p.qtd_vendidos or 0):
+    if soma_vendido > (p.qtd_vendidos or 0):
         raise HTTPException(
             status_code=400,
-            detail=f"Soma dos vendidos por tipo ({soma_vendido}) deve bater com vendidos do participante ({p.qtd_vendidos or 0})",
+            detail=f"Soma dos vendidos por tipo ({soma_vendido}) nao pode passar dos vendidos do participante ({p.qtd_vendidos or 0})",
         )
 
     # 3. Substituicao total: indexar existentes, upsert presentes, remover ausentes
