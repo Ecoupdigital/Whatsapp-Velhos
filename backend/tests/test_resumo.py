@@ -17,27 +17,25 @@ def _novo_participante(TestingSession, evento_id, nome, vendidos):
     return pid
 
 
-def test_resumo_itens_por_tipo_consolida(client, evento_galeto, TestingSession):
+def test_resumo_assado_derivado_de_cru(client, evento_galeto, TestingSession):
+    # Binario complementar: so cru e enviado; assado = vendidos - cru (derivado).
     eid = evento_galeto
     p1 = _novo_participante(TestingSession, eid, "A", 10)
     p2 = _novo_participante(TestingSession, eid, "B", 8)
 
-    # p1: cru 6 (ped 2) + assado 4 (ped 1)
+    # p1: vendidos 10, cru 6 -> assado derivado 4
     client.put(f"/api/eventos/{eid}/participantes/{p1}/itens", json={"itens": [
-        {"tipo": "cru", "qtd_vendido": 6, "qtd_pedido": 2},
-        {"tipo": "assado", "qtd_vendido": 4, "qtd_pedido": 1}]})
-    # p2: cru 3 (ped 0) + assado 5 (ped 3)
+        {"tipo": "cru", "qtd_vendido": 6}]})
+    # p2: vendidos 8, cru 3 -> assado derivado 5
     client.put(f"/api/eventos/{eid}/participantes/{p2}/itens", json={"itens": [
-        {"tipo": "cru", "qtd_vendido": 3, "qtd_pedido": 0},
-        {"tipo": "assado", "qtd_vendido": 5, "qtd_pedido": 3}]})
+        {"tipo": "cru", "qtd_vendido": 3}]})
 
     r = client.get(f"/api/eventos/{eid}/resumo")
     assert r.status_code == 200, r.text
     por_tipo = {x["tipo"]: x for x in r.json()["itens_por_tipo"]}
-    assert por_tipo["cru"]["total_vendido"] == 9   # 6+3
-    assert por_tipo["cru"]["total_pedido"] == 2    # 2+0
-    assert por_tipo["assado"]["total_vendido"] == 9  # 4+5
-    assert por_tipo["assado"]["total_pedido"] == 4   # 1+3
+    assert por_tipo["cru"]["total_vendido"] == 9      # 6+3 (armazenado)
+    assert por_tipo["assado"]["total_vendido"] == 9   # vendidos 18 - cru 9 (derivado)
+    assert "total_pedido" not in por_tipo["cru"]      # pedido removido
 
 
 def test_resumo_sem_itens_lista_vazia(client, evento_galeto):

@@ -341,7 +341,6 @@ class ItemOut(BaseModel):
 class ResumoItemTipo(BaseModel):
     tipo: str
     total_vendido: int
-    total_pedido: int
 
 
 class ParticipanteUpdate(BaseModel):

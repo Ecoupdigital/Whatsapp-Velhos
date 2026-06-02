@@ -471,21 +471,10 @@ export default function EventoDetailPage() {
     async (
       part: ParticipanteOut,
       tipo: string,
-      campo: "qtd_vendido" | "qtd_pedido",
       valor: number
     ) => {
-      const tipos = evento?.tipos_item || [];
-      const atuais = new Map(part.itens.map((it) => [it.tipo, it]));
-      const itens: ItemTipo[] = tipos.map((t) => {
-        const cur = atuais.get(t);
-        const base: ItemTipo = {
-          tipo: t,
-          qtd_vendido: cur?.qtd_vendido ?? 0,
-          qtd_pedido: cur?.qtd_pedido ?? 0,
-        };
-        if (t === tipo) base[campo] = valor;
-        return base;
-      });
+      // Binario complementar: so o tipo primario (cru) e enviado; assado = vendidos - cru (derivado).
+      const itens: ItemTipo[] = [{ tipo, qtd_vendido: valor, qtd_pedido: 0 }];
       try {
         await api.put(`/eventos/${eventoId}/participantes/${part.id}/itens`, { itens });
         await refetchParticipante(part.id);
@@ -855,34 +844,22 @@ export default function EventoDetailPage() {
               <thead>
                 <tr className="text-left text-txt-tertiary font-body text-xs uppercase tracking-wider">
                   <th className="py-1.5 pr-4 font-medium">Tipo</th>
-                  <th className="py-1.5 px-4 font-medium text-right">Vendido</th>
-                  <th className="py-1.5 px-4 font-medium text-right">Pedido</th>
-                  <th className="py-1.5 pl-4 font-medium text-right">Total a repassar</th>
+                  <th className="py-1.5 pl-4 font-medium text-right">Vendido (a repassar)</th>
                 </tr>
               </thead>
               <tbody>
                 {resumo.itens_por_tipo.map((it) => (
                   <tr key={it.tipo} className="border-t border-border-subtle">
                     <td className="py-2 pr-4 capitalize text-txt-primary font-body">{it.tipo}</td>
-                    <td className="py-2 px-4 text-right font-mono text-emerald-400">{it.total_vendido}</td>
-                    <td className="py-2 px-4 text-right font-mono text-blue-400">{it.total_pedido}</td>
-                    <td className="py-2 pl-4 text-right font-mono font-bold text-txt-primary">
-                      {it.total_vendido + it.total_pedido}
-                    </td>
+                    <td className="py-2 pl-4 text-right font-mono font-bold text-emerald-400">{it.total_vendido}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border">
                   <td className="py-2 pr-4 text-txt-secondary font-display uppercase text-xs tracking-wider">Total geral</td>
-                  <td className="py-2 px-4 text-right font-mono text-emerald-400">
-                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_vendido, 0)}
-                  </td>
-                  <td className="py-2 px-4 text-right font-mono text-blue-400">
-                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_pedido, 0)}
-                  </td>
                   <td className="py-2 pl-4 text-right font-mono font-bold text-orange-400">
-                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_vendido + it.total_pedido, 0)}
+                    {resumo.itens_por_tipo.reduce((s, it) => s + it.total_vendido, 0)}
                   </td>
                 </tr>
               </tfoot>

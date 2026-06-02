@@ -333,7 +333,6 @@ export interface ItemOut {
 export interface ResumoItemTipo {
   tipo: string;
   total_vendido: number;
-  total_pedido: number;
 }
 
 export interface PagamentoCreate {

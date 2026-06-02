@@ -659,21 +659,28 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
     cartoes_pagou_custo = sum(p.qtd_pagou_custo or 0 for p in parts)
     proximo_num = _proximo_numero(db, evento_id)
 
-    rows = (
+    # Binario complementar: tipo[0] (cru) e armazenado; tipo[1] (assado) = vendidos - cru.
+    tipos = _tipos_do_evento(e)
+    vendido_por_tipo = dict(
         db.query(
             EventoParticipanteItem.tipo,
             func.coalesce(func.sum(EventoParticipanteItem.qtd_vendido), 0),
-            func.coalesce(func.sum(EventoParticipanteItem.qtd_pedido), 0),
         )
         .join(EventoParticipante, EventoParticipante.id == EventoParticipanteItem.evento_participante_id)
         .filter(EventoParticipante.evento_id == evento_id)
         .group_by(EventoParticipanteItem.tipo)
         .all()
     )
-    itens_por_tipo = [
-        ResumoItemTipo(tipo=t, total_vendido=int(v or 0), total_pedido=int(ped or 0))
-        for (t, v, ped) in rows
-    ]
+    itens_por_tipo = []
+    if tipos and cartoes_vendidos > 0:
+        primary = tipos[0]
+        cru_total = int(vendido_por_tipo.get(primary, 0) or 0)
+        itens_por_tipo.append(ResumoItemTipo(tipo=primary, total_vendido=cru_total))
+        if len(tipos) >= 2:
+            complemento = tipos[1]
+            itens_por_tipo.append(
+                ResumoItemTipo(tipo=complemento, total_vendido=max(0, cartoes_vendidos - cru_total))
+            )
 
     return EventoResumo(
         total_participantes=len(parts),
@@ -722,7 +729,12 @@ def exportar_evento_xlsx(evento_id: int, db: Session = Depends(get_db)):
         .all()
     )
     tipos = _tipos_do_evento(e)
+    primary = tipos[0] if tipos else None       # cru (armazenado)
+    complemento = tipos[1] if len(tipos) >= 2 else None  # assado (= vendidos - cru)
     bold = Font(bold=True)
+
+    def _cru_de(p):
+        return next((i.qtd_vendido or 0 for i in (p.itens or []) if i.tipo == primary), 0)
 
     wb = Workbook()
 
@@ -730,14 +742,16 @@ def exportar_evento_xlsx(evento_id: int, db: Session = Depends(get_db)):
     ws = wb.active
     ws.title = "Participantes"
     header = ["Participante", "Recebidos", "Vendidos", "Devolvidos", "Pagou custo"]
-    for t in tipos:
-        header += [f"{t} vendido", f"{t} pedido"]
+    if primary:
+        header.append(f"{primary} vendido")
+    if complemento:
+        header.append(f"{complemento} (auto)")
     header += ["Valor esperado", "Valor pago", "Status"]
     ws.append(header)
     for c in ws[1]:
         c.font = bold
     for p in parts:
-        itens_map = {i.tipo: i for i in (p.itens or [])}
+        cru = _cru_de(p)
         row = [
             _nome_participante(p),
             p.qtd_cartoes_recebidos or 0,
@@ -745,26 +759,26 @@ def exportar_evento_xlsx(evento_id: int, db: Session = Depends(get_db)):
             p.qtd_devolvidos or 0,
             p.qtd_pagou_custo or 0,
         ]
-        for t in tipos:
-            it = itens_map.get(t)
-            row += [it.qtd_vendido if it else 0, it.qtd_pedido if it else 0]
+        if primary:
+            row.append(cru)
+        if complemento:
+            row.append(max(0, (p.qtd_vendidos or 0) - cru))
         row += [p.valor or 0, p.valor_pago or 0, p.status or ""]
         ws.append(row)
 
-    # ── Aba 2: Relacao Cru x Assado ──
+    # ── Aba 2: Relacao Cru x Assado (so vendido, a repassar pra cozinha) ──
     ws2 = wb.create_sheet("Relacao Cru x Assado")
-    ws2.append(["Tipo", "Vendido", "Pedido", "Total a repassar"])
+    ws2.append(["Tipo", "Vendido"])
     for c in ws2[1]:
         c.font = bold
-    tot_v = tot_p = 0
-    for t in tipos:
-        v = sum((i.qtd_vendido or 0) for p in parts for i in (p.itens or []) if i.tipo == t)
-        ped = sum((i.qtd_pedido or 0) for p in parts for i in (p.itens or []) if i.tipo == t)
-        ws2.append([t, v, ped, v + ped])
-        tot_v += v
-        tot_p += ped
+    total_vendidos = sum(p.qtd_vendidos or 0 for p in parts)
+    cru_total = sum(_cru_de(p) for p in parts)
+    if primary:
+        ws2.append([primary, cru_total])
+    if complemento:
+        ws2.append([complemento, max(0, total_vendidos - cru_total)])
     trow = ws2.max_row + 1
-    ws2.append(["Total geral", tot_v, tot_p, tot_v + tot_p])
+    ws2.append(["Total geral", total_vendidos if complemento else cru_total])
     for c in ws2[trow]:
         c.font = bold
 
