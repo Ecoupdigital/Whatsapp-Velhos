@@ -1,6 +1,10 @@
 import json
 
+import io
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
 from datetime import datetime
@@ -686,4 +690,111 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
         cartoes_pagou_custo=cartoes_pagou_custo,
         proximo_numero=proximo_num,
         itens_por_tipo=itens_por_tipo,
+    )
+
+
+def _nome_participante(p: EventoParticipante) -> str:
+    if p.jogador and p.jogador.nome:
+        return p.jogador.nome
+    return p.nome_avulso or f"Participante {p.id}"
+
+
+@router.get("/{evento_id}/export")
+def exportar_evento_xlsx(evento_id: int, db: Session = Depends(get_db)):
+    """Exporta o evento (Galeto) para um .xlsx com 3 abas: Participantes, Relacao Cru x Assado, Faixas."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    e = db.query(Evento).filter(Evento.id == evento_id).first()
+    if not e:
+        raise HTTPException(status_code=404, detail="Evento nao encontrado")
+
+    parts = (
+        db.query(EventoParticipante)
+        .options(
+            joinedload(EventoParticipante.jogador),
+            selectinload(EventoParticipante.faixas),
+            selectinload(EventoParticipante.itens),
+        )
+        .filter(EventoParticipante.evento_id == evento_id)
+        .order_by(EventoParticipante.id)
+        .all()
+    )
+    tipos = _tipos_do_evento(e)
+    bold = Font(bold=True)
+
+    wb = Workbook()
+
+    # ── Aba 1: Participantes ──
+    ws = wb.active
+    ws.title = "Participantes"
+    header = ["Participante", "Recebidos", "Vendidos", "Devolvidos", "Pagou custo"]
+    for t in tipos:
+        header += [f"{t} vendido", f"{t} pedido"]
+    header += ["Valor esperado", "Valor pago", "Status"]
+    ws.append(header)
+    for c in ws[1]:
+        c.font = bold
+    for p in parts:
+        itens_map = {i.tipo: i for i in (p.itens or [])}
+        row = [
+            _nome_participante(p),
+            p.qtd_cartoes_recebidos or 0,
+            p.qtd_vendidos or 0,
+            p.qtd_devolvidos or 0,
+            p.qtd_pagou_custo or 0,
+        ]
+        for t in tipos:
+            it = itens_map.get(t)
+            row += [it.qtd_vendido if it else 0, it.qtd_pedido if it else 0]
+        row += [p.valor or 0, p.valor_pago or 0, p.status or ""]
+        ws.append(row)
+
+    # ── Aba 2: Relacao Cru x Assado ──
+    ws2 = wb.create_sheet("Relacao Cru x Assado")
+    ws2.append(["Tipo", "Vendido", "Pedido", "Total a repassar"])
+    for c in ws2[1]:
+        c.font = bold
+    tot_v = tot_p = 0
+    for t in tipos:
+        v = sum((i.qtd_vendido or 0) for p in parts for i in (p.itens or []) if i.tipo == t)
+        ped = sum((i.qtd_pedido or 0) for p in parts for i in (p.itens or []) if i.tipo == t)
+        ws2.append([t, v, ped, v + ped])
+        tot_v += v
+        tot_p += ped
+    trow = ws2.max_row + 1
+    ws2.append(["Total geral", tot_v, tot_p, tot_v + tot_p])
+    for c in ws2[trow]:
+        c.font = bold
+
+    # ── Aba 3: Faixas ──
+    ws3 = wb.create_sheet("Faixas")
+    ws3.append(["Participante", "Inicio", "Fim", "Quantidade", "Sem numero"])
+    for c in ws3[1]:
+        c.font = bold
+    for p in parts:
+        for f in sorted(p.faixas or [], key=lambda x: (x.sem_numero or 0, x.numero_inicio or 0)):
+            if f.sem_numero:
+                ws3.append([_nome_participante(p), "", "", f.quantidade or 0, "Sim"])
+            else:
+                ws3.append([_nome_participante(p), f.numero_inicio, f.numero_fim, f.quantidade or 0, "Nao"])
+
+    # auto-largura simples por aba
+    for sheet in (ws, ws2, ws3):
+        for col in range(1, sheet.max_column + 1):
+            letter = get_column_letter(col)
+            largura = max((len(str(c.value)) for c in sheet[letter] if c.value is not None), default=8)
+            sheet.column_dimensions[letter].width = min(max(largura + 2, 10), 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    slug = re.sub(r"[^a-z0-9]+", "-", (e.titulo or "evento").lower()).strip("-") or "evento"
+    fname = f"galeto-{slug}-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )

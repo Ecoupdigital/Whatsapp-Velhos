@@ -24,6 +24,7 @@ import {
   UserPlus,
   Ticket,
   Flame,
+  Download,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -184,6 +185,9 @@ export default function EventoDetailPage() {
   // Popular elenco
   const [popularLoading, setPopularLoading] = useState(false);
 
+  // Export XLSX
+  const [exportLoading, setExportLoading] = useState(false);
+
   // Pagamento modal
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [payParticipante, setPayParticipante] = useState<ParticipanteOut | null>(null);
@@ -290,6 +294,34 @@ export default function EventoDetailPage() {
       toast.error(err instanceof Error ? err.message : "Erro ao popular");
     } finally {
       setPopularLoading(false);
+    }
+  };
+
+  const handleExportXlsx = async () => {
+    try {
+      setExportLoading(true);
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await fetch(`/api/eventos/${eventoId}/export`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Falha ao exportar");
+      const blob = await res.blob();
+      const disp = res.headers.get("Content-Disposition") || "";
+      const match = disp.match(/filename="?([^"]+)"?/);
+      const fname = match ? match[1] : `galeto-evento-${eventoId}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Planilha exportada");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao exportar");
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -881,6 +913,15 @@ export default function EventoDetailPage() {
             onClick={() => setAvulsoModalOpen(true)}
           >
             Convidado avulso
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Download />}
+            onClick={handleExportXlsx}
+            loading={exportLoading}
+          >
+            Exportar XLSX
           </Button>
 
           <div className="flex-1" />
