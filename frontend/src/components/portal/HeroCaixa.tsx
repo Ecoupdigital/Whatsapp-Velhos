@@ -36,7 +36,7 @@ export function HeroCaixa({ meta, caixa }: HeroCaixaProps) {
       </p>
 
       <div className="mt-4 flex flex-col items-center gap-1">
-        <span className="font-body text-xs uppercase tracking-wide text-txt-tertiary">
+        <span className="font-body text-xs uppercase tracking-wide text-txt-secondary">
           Saldo em caixa
         </span>
         <span

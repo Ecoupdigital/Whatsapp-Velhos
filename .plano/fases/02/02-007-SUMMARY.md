@@ -168,3 +168,53 @@ Verificacoes passaram:
 - [x] robots noindex no layout.tsx - CONFIRMADO
 
 ## Self-Check: PASSOU
+
+---
+
+## Correcoes DCRV (2026-06-04 - pos-prova visual)
+
+Aplicadas apos o DCRV-REPORT da prova visual. Commit: ver `fix(02): VIS-01...` no git log.
+
+### VIS-01 (BLOCKER) - Animacao no mount substituindo whileInView
+
+**Problema:** `CaixaBloco.tsx`, `EventosBloco.tsx` e `JogosBloco.tsx` usavam `whileInView` com `viewport={{ once: true, margin: "-40px" }}`. Blocos abaixo da dobra (top: 997px e 1346px) ficavam com `opacity: 0` em capturas fullPage sem scroll simulado (bots OG, screenshot-as-a-service, testes E2E Playwright).
+
+**Correcao:** Em todos os 3 arquivos, trocado `whileInView={{ opacity: 1, y: 0 }}` por `animate={{ opacity: 1, y: 0 }}` e removida a prop `viewport`. O `initial` e o `transition` foram mantidos. Mesmo padrao ja usado no `HeroCaixa.tsx` (referencia).
+
+**Arquivos:** `CaixaBloco.tsx:22`, `EventosBloco.tsx:31`, `JogosBloco.tsx:89`
+
+### VIS-04 (minor, responsivo) - Grid StatCards mobile
+
+**Problema:** Grid `grid-cols-5` fixo em 390px resultava em cards de ~62px, o label "Gols Contra" quebrava em duas linhas.
+
+**Correcao:** Alterado para `grid-cols-3 sm:grid-cols-5`. Em mobile os 3 primeiros cards (V/E/D) ficam na primeira linha e os 2 de gols na segunda. Labels normalizados para "Gols Pro" / "Gols Contra" (Title Case). Em `>= 640px` volta a exibir todos os 5 em linha.
+
+**Arquivo:** `JogosBloco.tsx:98`
+
+### VIS-02 (minor, a11y) - Contraste txt-tertiary em labels informativos
+
+**Problema:** `txt-tertiary` (#5C5C6A) sobre `surface-card` (#14141A) = ratio 2.79:1, abaixo do WCAG AA 3:1. Afetava labels de dados (Arrecadou, Custo, Sobrou, StatCard labels, "Saldo em caixa").
+
+**Correcao:** Labels informativos relevantes elevados de `text-txt-tertiary` para `text-txt-secondary` (#8E8E9A, ratio ~3.8:1) nos seguintes locais:
+- `EventosBloco.tsx` labels da grid financeira (Arrecadou, Custo previsto, Sobrou)
+- `JogosBloco.tsx` label dos StatCard (V/E/D/Gols)
+- `HeroCaixa.tsx` label "Saldo em caixa"
+
+Textos de metadata menos prioritaria (`atualizado em`, datas de jogos) mantidos em `txt-tertiary` intencionalmente.
+
+### VIS-03 (minor) - Custo estimado/a confirmar visualmente diferenciado
+
+**Problema:** Custo previsto e custo "a confirmar" usavam mesmo estilo do custo real, potencialmente confundindo o leitor.
+
+**Correcao:** Quando `ev.custo_origem !== "real"`, o valor do custo recebe `italic text-txt-tertiary` (em vez de `text-txt-secondary`) mais um asterisco em `text-amber-500` (`*`). O label ja diferenciava o texto ("Custo previsto" / "A confirmar") via `ROTULO_CUSTO`.
+
+**Arquivo:** `EventosBloco.tsx:84-91`
+
+### Build pos-correcoes
+
+```
+npx tsc --noEmit  ->  (sem output, zero erros)
+npm run build     ->  Compiled successfully, 18 paginas estaticas
+```
+
+O warning `useCallback unnecessary dependency` em `(app)/eventos/[id]/page.tsx:488` e pre-existente e fora do escopo desta correcao.

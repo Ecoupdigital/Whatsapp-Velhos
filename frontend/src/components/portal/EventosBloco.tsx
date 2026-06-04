@@ -28,8 +28,7 @@ export function EventosBloco({ eventos }: EventosBlocoProps) {
     <motion.section
       data-block="eventos"
       initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="space-y-4"
     >
@@ -70,7 +69,7 @@ export function EventosBloco({ eventos }: EventosBlocoProps) {
 
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
-                  <p className="font-body text-[11px] uppercase tracking-wide text-txt-tertiary">
+                  <p className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">
                     Arrecadou
                   </p>
                   <p className="font-display text-sm font-semibold tabular-nums text-txt-primary">
@@ -78,15 +77,25 @@ export function EventosBloco({ eventos }: EventosBlocoProps) {
                   </p>
                 </div>
                 <div>
-                  <p className="font-body text-[11px] uppercase tracking-wide text-txt-tertiary">
+                  <p className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">
                     {ROTULO_CUSTO[ev.custo_origem]}
                   </p>
-                  <p className="font-display text-sm font-semibold tabular-nums text-txt-secondary">
+                  <p
+                    className={
+                      "font-display text-sm font-semibold tabular-nums " +
+                      (ev.custo_origem !== "real"
+                        ? "italic text-txt-tertiary"
+                        : "text-txt-secondary")
+                    }
+                  >
                     {formatCurrency(ev.custo)}
+                    {ev.custo_origem !== "real" && (
+                      <span className="ml-1 not-italic text-[10px] text-amber-500">*</span>
+                    )}
                   </p>
                 </div>
                 <div>
-                  <p className="font-body text-[11px] uppercase tracking-wide text-txt-tertiary">
+                  <p className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">
                     Sobrou
                   </p>
                   <p

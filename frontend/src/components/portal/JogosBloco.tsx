@@ -71,7 +71,7 @@ function StatCard({
   return (
     <Card padding="sm" className="text-center">
       <p className={"font-display text-xl font-bold tabular-nums " + cor}>{valor}</p>
-      <p className="font-body text-[10px] uppercase tracking-wide text-txt-tertiary">
+      <p className="font-body text-[10px] uppercase tracking-wide text-txt-secondary">
         {label}
       </p>
     </Card>
@@ -86,8 +86,7 @@ export function JogosBloco({ jogos }: JogosBlocoProps) {
     <motion.section
       data-block="jogos"
       initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="space-y-4"
     >
@@ -95,12 +94,12 @@ export function JogosBloco({ jogos }: JogosBlocoProps) {
         <Trophy className="h-5 w-5 text-brand-red" /> Em campo
       </h2>
 
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
         <StatCard valor={resumo.vitorias} label="V" cor="text-emerald-400" />
         <StatCard valor={resumo.empates} label="E" cor="text-txt-secondary" />
         <StatCard valor={resumo.derrotas} label="D" cor="text-brand-red" />
-        <StatCard valor={resumo.gols_pro} label="Gols pro" cor="text-txt-primary" />
-        <StatCard valor={resumo.gols_contra} label="Gols contra" cor="text-txt-primary" />
+        <StatCard valor={resumo.gols_pro} label="Gols Pro" cor="text-txt-primary" />
+        <StatCard valor={resumo.gols_contra} label="Gols Contra" cor="text-txt-primary" />
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
