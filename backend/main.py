@@ -9,7 +9,7 @@ from models import Usuario, Conta
 from auth import hash_password
 from migrations import run_additive_migrations
 
-from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes, contas, campanhas
+from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes, contas, campanhas, portal
 from routers.configuracoes import seed_defaults as seed_default_configs
 from services.scheduler import start_scheduler, stop_scheduler
 from services.campanha_service import UPLOAD_DIR
@@ -49,6 +49,7 @@ app.include_router(dashboard.router)
 app.include_router(contas.router)
 app.include_router(configuracoes.router)
 app.include_router(campanhas.router)
+app.include_router(portal.router)
 
 # Arquivos de midia das campanhas (servidos publicamente p/ a uazapi buscar)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
