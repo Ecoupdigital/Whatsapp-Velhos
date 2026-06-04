@@ -7,10 +7,10 @@
 
 ## Posição Atual
 **Fase:** 1 de 2
-**Plano:** 0 de ?
-**Status:** Pronto para planejar
-**Progresso:** [░░░░░░░░░░] 0%
-**Requisitos:** 17 (novos)
+**Plano:** 1 de 3 (01-001 concluido)
+**Status:** Em andamento
+**Progresso:** [██░░░░░░░░] 33%
+**Requisitos:** API-06, SEC-01, SEC-03 (marcados completos no 01-001)
 
 ## Contexto Acumulado
 
@@ -24,14 +24,16 @@ Ver PROJECT.md Key Decisions e SYSTEM-DESIGN.md. Destaques:
 - Custo de evento = custo_real se >0 senão custo_estimado, com `custo_origem`
 - Eventos filtrados: concluido + em_andamento (planejado só se arrecadou), exclui cancelado
 - Sem libs novas, sem migration, CORS inalterado, deploy na mesma pipeline Coolify
+- Models Portal* isolados dos schemas internos (prefixo Portal*) para contrato público estável
+- PortalCaixaAtrasos com int (não list, não str) como trava de privacidade tipada (SEC-01)
+- Sem class Config/from_attributes nos Portal* pois são montados no handler, não lidos direto do ORM
 
 ### Planos Completos
-Nenhum ainda (acabou de ser estruturado).
+- **01-001** (2026-06-04): Schemas Portal* (11 models Pydantic v2) + scaffold test_portal.py com fixture seed_portal_data. Commit: 7aeaf6f.
 
 ### Bloqueios
 Nenhum.
 
 ## Continuidade de Sessão
 Modo builder brownfield ativo. Feature escopada SÓ ao Portal de Transparência.
-O `.plano/_galeto-concluido/` é de feature anterior já entregue (referência de estilo, ignorar).
-Próxima ação: planejar Fase 1 (backend `backend/routers/portal.py` + schemas `Portal*` + registro em main.py + verificação de privacidade).
+Plano 01-001 concluído. Próximo: 01-002 (router portal.py + endpoint GET /api/portal).
