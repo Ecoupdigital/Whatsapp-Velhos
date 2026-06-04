@@ -1,15 +1,16 @@
-# Fase 02: API (faixas + itens + resumo)
+# Fase 02: Frontend — Portal
 
-**Objetivo:** Endpoints para gerir faixas e split por tipo, recebidos derivado, validacoes de fechamento e resumo consolidado.
-**Requisitos cobertos:** API-01, API-02, API-03, API-04, API-05, API-06, API-07, API-08, API-09, API-10, TEST-02, TEST-03
-**Criterios de sucesso:**
-- [ ] Criar faixa numerada quebrada e lote sem numero via API; recebidos reflete a soma
-- [ ] PUT itens valida fechamento (400 quando soma != vendidos do participante)
-- [ ] `popular_elenco` cria faixa numerada por jogador; reconciliacao mantida
-- [ ] `GET /resumo` retorna `itens_por_tipo` com total vendido e pedido por tipo
-- [ ] `PUT /eventos/{id}` salva e `GET` retorna `tipos_item` como lista
-- [ ] `GET /eventos/{id}/participantes/{pid}` (singular) retorna participante com faixas e itens (refetch Fase 3)
+**Objetivo:** Entregar a página pública `/transparencia` que consome `/api/portal`
+e renderiza os 4 blocos, responsiva, com gráfico de fluxo e noindex.
 
-**Dependencias:** Fase 1
-**Estimativa:** 5 planos
-**Arquivos:** `backend/routers/eventos.py`, `backend/schemas.py`, `backend/tests/`
+**Requisitos cobertos:** UI-01, UI-02, UI-03, UI-04, UI-05, DEPLOY-01, DEPLOY-02 (same-origin)
+
+**Critérios de sucesso:**
+- [ ] `/transparencia` abre sem login (não redireciona pro `/login`) e renderiza os 4 blocos + footer
+- [ ] Gráfico de fluxo 12 meses renderiza com recharts e dado real
+- [ ] Hero mostra saldo herói + carimbo "atualizado em DD/MM HH:MM" (BRT); usável em mobile
+- [ ] Badges de atraso exibem os COUNTs; líquido em verde/vermelho com rótulo de custo conforme `custo_origem`
+- [ ] HTML contém meta tag `noindex`; navegador não fala direto com o backend (same-origin via rewrite)
+
+**Dependências:** Fase 01 (contrato `/api/portal` pronto e estável).
+**Estimativa:** 1-2 planos (route group + página + componentes + gráfico).

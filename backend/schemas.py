@@ -717,3 +717,84 @@ class DashboardData(BaseModel):
     proximos_jogos: list[JogoOut]
     alertas: list[str]
     fluxo_mensal: list[FluxoMensal]
+
+
+# === Portal de Transparencia (publico) ===
+
+class PortalMeta(BaseModel):
+    time_nome: str
+    atualizado_em: str  # ISO 8601 do momento da request
+
+
+class PortalCaixaAtrasos(BaseModel):
+    mensalidades: int   # COUNT mensalidades status='atrasado' no mes corrente
+    jogadores: int      # COUNT DISTINCT jogador_id dessas mensalidades
+
+
+class PortalFluxoMes(BaseModel):
+    mes: str            # "YYYY-MM"
+    entradas: float
+    saidas: float
+
+
+class PortalCaixa(BaseModel):
+    saldo_atual: float
+    total_entrou: float
+    total_saiu: float
+    entrou_mes: float
+    saiu_mes: float
+    fluxo_12m: list[PortalFluxoMes]
+    atrasos: PortalCaixaAtrasos
+
+
+class PortalEvento(BaseModel):
+    titulo: str
+    tipo: str
+    data: Optional[str] = None     # data_inicio (YYYY-MM-DD) ou None
+    arrecadado: float
+    custo: float
+    custo_origem: str              # "real" | "estimado" | "sem_custo"
+    liquido: float
+    status: str                    # concluido | em_andamento | planejado
+
+
+class PortalJogoResumo(BaseModel):
+    vitorias: int
+    empates: int
+    derrotas: int
+    gols_pro: int
+    gols_contra: int
+
+
+class PortalRankingEntry(BaseModel):
+    nome: str
+    quantidade: int
+
+
+class PortalResultado(BaseModel):
+    data: str
+    adversario: str
+    placar: str                    # "2x1"
+
+
+class PortalProximoJogo(BaseModel):
+    data: str
+    horario: Optional[str] = None
+    local: Optional[str] = None
+    adversario: str
+
+
+class PortalJogos(BaseModel):
+    resumo: PortalJogoResumo
+    artilharia: list[PortalRankingEntry]
+    assistencias: list[PortalRankingEntry]
+    destaques: list[PortalRankingEntry]
+    ultimos_resultados: list[PortalResultado]
+    proximos_jogos: list[PortalProximoJogo]
+
+
+class PortalResponse(BaseModel):
+    meta: PortalMeta
+    caixa: PortalCaixa
+    eventos: list[PortalEvento]
+    jogos: PortalJogos

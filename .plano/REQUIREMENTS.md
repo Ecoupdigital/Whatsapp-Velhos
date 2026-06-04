@@ -1,82 +1,110 @@
-# Requisitos: Eventos Galeto - Faixas multiplas + Cru/Assado
+# REQUIREMENTS: Portal de Transparência — Velhos Parceiros F.C.
 
-> Feature brownfield. Versao desta feature: v1 (Galeto). Sistema B fora de escopo.
+> Feature brownfield. Requisitos escopados SÓ ao Portal de Transparência.
+> Cada REQ é específico e testável. Rastreabilidade pra fase no fim.
 
-## Requisitos
+## Backend — API pública (API)
 
-### Banco de Dados (DB)
-- [ ] DB-01: Criar modelo/tabela `evento_cartao_faixa` (`id`, `evento_participante_id` FK CASCADE, `numero_inicio` null, `numero_fim` null, `quantidade` not null, `sem_numero` 0/1, `created_at`) com indice `ix_faixa_participante`.
-- [ ] DB-02: Criar modelo/tabela `evento_participante_item` (`id`, `evento_participante_id` FK CASCADE, `tipo`, `qtd_vendido` default 0, `qtd_pedido` default 0) com indice unico `(evento_participante_id, tipo)`.
-- [ ] DB-03: Adicionar coluna `eventos.tipos_item` (Text, JSON serializado, nullable).
-- [ ] DB-04: Adicionar relationships em `EventoParticipante` (`faixas`, `itens`) com `cascade="all, delete-orphan"` e back_populates.
+- [ ] **API-01**: `backend/routers/portal.py` existe com `prefix="/api/portal"` e é
+  registrado em `backend/main.py` via `app.include_router(portal.router)`.
+  *Testável:* `GET /api/portal` retorna 200 sem header `Authorization`.
 
-### Migracao (MIG)
-- [ ] MIG-01: Criar `backend/migrations.py` com `run_additive_migrations(engine)` chamada em `main.py` apos `create_all`; faz `ALTER TABLE eventos ADD COLUMN tipos_item TEXT` apenas se a coluna nao existe (via `inspect`).
-- [ ] MIG-02: Backfill idempotente: cada participante SEM faixa recebe 1 faixa numerada (se tem numero_inicio+fim) ou 1 faixa sem_numero (se qtd_cartoes_recebidos > 0). Rodar 2x nao duplica.
-- [ ] MIG-03: Migracao funciona em Postgres E SQLite (Text JSON, ADD COLUMN portavel, bool 0/1). Nao usar JSONB nem IF NOT EXISTS.
-- [ ] MIG-04: Pos-migracao, para todo participante `sum(faixas.quantidade) == qtd_cartoes_recebidos_legado` (contagem preservada, verificavel por script/assert).
-- [ ] MIG-05: Migracao estritamente aditiva - sem DROP nem rename de tabelas/colunas existentes; colunas legadas (`numero_inicio`, `numero_fim`, `qtd_cartoes_recebidos` do EventoParticipante) permanecem intactas. Verificavel: o schema pos-migracao contem TODAS as colunas pre-migracao (assert via `inspect()`).
+- [ ] **API-02**: `GET /api/portal` entrega o pacote agregado completo numa única request,
+  com as chaves de topo `meta`, `caixa`, `eventos`, `jogos`.
+  *Testável:* o JSON de resposta contém exatamente essas 4 chaves no nível raiz.
 
-### API (API)
-- [ ] API-01: `GET/POST/PUT/DELETE /eventos/{id}/participantes/{pid}/faixas[/{faixa_id}]` com validacao: numerada exige `fim>=ini` e deriva quantidade; sem_numero exige `quantidade>=1` e zera numeros.
-- [ ] API-02: Helper `_recalc_recebidos(p)` define `qtd_cartoes_recebidos = sum(faixas.quantidade)`; chamado apos toda mutacao de faixa; cliente nunca dita recebidos.
-- [ ] API-03: `PUT /eventos/{id}/participantes/{pid}/itens` faz upsert por tipo (substituicao total da lista), valida tipo em `evento.tipos_item` e fechamento `sum(qtd_vendido)==p.qtd_vendidos` (400 se nao fecha); `qtd_pedido` livre.
-- [ ] API-04: `popular_elenco` cria 1 faixa numerada por jogador (qtd>0) usando `_proximo_numero` global; recebidos derivado.
-- [ ] API-05: `atualizar_cartoes` aplica vendidos/devolvidos/pagou_custo e mantem reconciliacao `<= recebidos`; nao usa mais payload para definir recebidos.
-- [ ] API-06: `GET /eventos/{id}/resumo` retorna `itens_por_tipo` (lista `{tipo, total_vendido, total_pedido}`) agregado por tipo no evento.
-- [ ] API-07: `EventoCreate/Update/Out` aceitam/retornam `tipos_item: list[str]`; escrita serializa json.dumps, leitura desserializa via field_validator; `PUT /eventos/{id}` salva tipos.
-- [ ] API-08: `_proximo_numero` passa a considerar `max(numero_fim)` tambem das faixas.
-- [ ] API-09: `ParticipanteOut` inclui `faixas: list[FaixaOut]` e `itens: list[ItemOut]`.
-- [ ] API-10: `GET /eventos/{id}/participantes/{pid}` (SINGULAR) retorna `ParticipanteOut` completo (jogador + faixas + itens) para refetch granular de uma linha do grid (Fase 3 / 03-04 `refetchParticipante`). Colecoes via `selectinload`. Fecha handoff INC-001.
+- [ ] **API-03**: Bloco `caixa` traz `saldo_atual`, `total_entrou`, `total_saiu`,
+  `entrou_mes`, `saiu_mes`, `fluxo_12m` (lista de `{mes, entradas, saidas}` ≤ 12 itens)
+  e `atrasos`. `saldo_atual` = soma de `_calcular_saldo_atual` das contas ativas.
+  *Testável:* `saldo_atual` bate com a soma manual; `fluxo_12m` tem no máximo 12 itens.
 
-### Frontend (UI)
-- [ ] UI-01: Grid inline (tabela planilha) de participantes na tela `/eventos/[id]`: colunas editaveis in-place com autosave (blur/Enter), recalculo otimista e revert em erro 400.
-- [ ] UI-02: Sub-linha expansivel de faixas por participante: add faixa numerada (inicio/fim), add lote sem numero (quantidade), editar e remover cada faixa; lote sem numero exibe "Sem numero (N cartoes)".
-- [ ] UI-03: Colunas de tipo (cru vend / assado vend / cru ped / assado ped) renderizadas dinamicamente a partir de `evento.tipos_item`; salvam via PUT itens.
-- [ ] UI-04: Modal de config do evento ganha campo "Tipos de item" (chips/csv -> array) salvo via PUT evento.
-- [ ] UI-05: Card de estatistica do evento mostra relacao consolidada cru x assado (vendido + pedido por tipo) e total a repassar, lendo `resumo.itens_por_tipo`.
-- [ ] UI-06: Tipos TS novos (`FaixaOut/Create/Update`, `ItemTipo/ItensUpdate/ItemOut`, `ResumoItemTipo`) e estensoes (`EventoOut`, `ParticipanteOut`, `EventoResumo`, `EventoCreate/Update`).
+- [ ] **API-04**: Cada item de `eventos` traz `titulo, tipo, data, arrecadado, custo,
+  custo_origem, liquido, status`. `custo` = `custo_real` se > 0, senão `custo_estimado`;
+  `custo_origem` ∈ {`real`, `estimado`, `sem_custo`}; `liquido = arrecadado - custo`.
+  *Testável:* para um evento com `custo_real > 0`, `custo_origem == "real"` e
+  `liquido == arrecadado - custo_real`.
 
-### Testes/Validacao (TEST)
-- [ ] TEST-01: Dados atuais intactos apos migracao (mesma contagem de recebidos por participante).
-- [ ] TEST-02: Adicionar faixa numerada quebrada (ex: 1-12 e depois 45-50) E lote sem numero a um jogador; recebidos soma corretamente.
-- [ ] TEST-03: Split cru/assado que nao fecha com vendidos retorna 400; que fecha persiste.
-- [ ] TEST-04: Estatistica do evento mostra a relacao total (cru/assado vendido + pedido).
-- [ ] TEST-05: Edicao inline recalcula e persiste sem modal; erro de validacao reverte celula.
-- [ ] TEST-06: `run_additive_migrations` rodada 2x nao duplica faixas nem coluna (idempotencia).
+- [ ] **API-05**: Bloco `jogos` traz `resumo` (`vitorias, empates, derrotas, gols_pro,
+  gols_contra`), `artilharia`, `assistencias`, `destaques` (listas `{nome, quantidade}`),
+  `ultimos_resultados` (`{data, adversario, placar}`) e `proximos_jogos`
+  (`{data, horario, local, adversario}`).
+  *Testável:* `resumo` bate com `/api/jogos/estatisticas`; rankings batem com `/api/jogos/rankings`.
+
+- [ ] **API-06**: Schemas Pydantic v2 `Portal*` definidos em `backend/schemas.py` tipam
+  a resposta inteira; o endpoint usa `response_model=PortalResponse`.
+  *Testável:* a resposta valida contra `PortalResponse` (FastAPI rejeita campo fora do schema).
+
+- [ ] **API-07**: Filtro de eventos: inclui status `concluido` e `em_andamento`;
+  `planejado` só entra se `arrecadado > 0`; `cancelado` é excluído; ordenado por data desc.
+  *Testável:* um evento `cancelado` não aparece; um `planejado` com 0 arrecadado não aparece.
+
+## Backend — Privacidade (SEC)
+
+- [ ] **SEC-01**: `caixa.atrasos.mensalidades` = COUNT de mensalidades `status='atrasado'`
+  no mês corrente; `caixa.atrasos.jogadores` = COUNT DISTINCT `jogador_id` dessas.
+  Ambos inteiros, nunca lista.
+  *Testável:* os dois campos são `int`; nenhuma lista de mensalidades é retornada.
+
+- [ ] **SEC-02**: Nenhum nome de jogador aparece ligado a pagamento/financeiro no payload.
+  Nome só existe em `jogos.artilharia/assistencias/destaques`.
+  *Testável:* varredura do payload não encontra nome de jogador fora de `jogos.*`.
+
+- [ ] **SEC-03**: O payload não contém lista de transações individuais nem PII
+  (telefone, apelido em contexto financeiro, registro cru de mensalidade/participante).
+  *Testável:* nenhuma chave do payload expõe `transacoes[]`, `participantes[]`, `telefone`.
+
+## Frontend — Portal público (UI)
+
+- [ ] **UI-01**: Route group `frontend/src/app/(public)/` com `layout.tsx` sem guard de
+  auth (header limpo: escudo + nome, sem sidebar). Não herda o redirect de `(app)`.
+  *Testável:* acessar `/transparencia` sem token não redireciona pro `/login`.
+
+- [ ] **UI-02**: `frontend/src/app/(public)/transparencia/page.tsx` faz fetch de
+  `/api/portal` e renderiza os 4 blocos: Hero, Caixa, Eventos, Em campo (jogos) + footer.
+  *Testável:* a página renderiza os 4 blocos com dado real do endpoint.
+
+- [ ] **UI-03**: Gráfico de fluxo 12 meses (entradas vs saídas) renderizado com recharts
+  a partir de `caixa.fluxo_12m`.
+  *Testável:* o gráfico aparece com as 12 séries de dado real (não placeholder).
+
+- [ ] **UI-04**: Hero mostra `saldo_atual` em número herói e carimbo
+  "atualizado em DD/MM HH:MM" (BRT, formatado a partir de `meta.atualizado_em`).
+  Layout responsivo mobile-first.
+  *Testável:* o carimbo aparece formatado; a página é usável em viewport mobile.
+
+- [ ] **UI-05**: Bloco Caixa mostra cards de total entrou/saiu e 2 badges de atraso
+  (N mensalidades, N jogadores). Bloco Eventos mostra líquido em verde (positivo) /
+  vermelho (negativo) com rótulo de custo conforme `custo_origem`.
+  *Testável:* badges exibem os COUNTs; líquido negativo aparece em vermelho.
+
+## Deploy (DEPLOY)
+
+- [ ] **DEPLOY-01**: A página `/transparencia` define `metadata.robots = { index: false,
+  follow: false }` (noindex).
+  *Testável:* o HTML servido contém a meta tag `noindex`.
+
+- [ ] **DEPLOY-02**: CORS do backend permanece inalterado; o front chama `/api`
+  same-origin via rewrite. Sem container novo, sem env nova, sem migration.
+  *Testável:* `main.py` mantém a allowlist de CORS atual; nenhuma migration foi adicionada.
 
 ## Rastreabilidade
 
 | Requisito | Fase | Status |
 |-----------|------|--------|
-| DB-01 | Fase 1 | Pendente |
-| DB-02 | Fase 1 | Pendente |
-| DB-03 | Fase 1 | Pendente |
-| DB-04 | Fase 1 | Pendente |
-| MIG-01 | Fase 1 | Pendente |
-| MIG-02 | Fase 1 | Pendente |
-| MIG-03 | Fase 1 | Pendente |
-| MIG-04 | Fase 1 | Pendente |
-| MIG-05 | Fase 1 | Pendente |
-| TEST-01 | Fase 1 | Pendente |
-| TEST-06 | Fase 1 | Pendente |
-| API-01 | Fase 2 | Pendente |
-| API-02 | Fase 2 | Pendente |
-| API-03 | Fase 2 | Pendente |
-| API-04 | Fase 2 | Pendente |
-| API-05 | Fase 2 | Pendente |
-| API-06 | Fase 2 | Pendente |
-| API-07 | Fase 2 | Pendente |
-| API-08 | Fase 2 | Pendente |
-| API-09 | Fase 2 | Pendente |
-| API-10 | Fase 2 | Pendente |
-| TEST-02 | Fase 2 | Pendente |
-| TEST-03 | Fase 2 | Pendente |
-| UI-01 | Fase 3 | Pendente |
-| UI-02 | Fase 3 | Pendente |
-| UI-03 | Fase 3 | Pendente |
-| UI-04 | Fase 3 | Pendente |
-| UI-05 | Fase 3 | Pendente |
-| UI-06 | Fase 3 | Pendente |
-| TEST-04 | Fase 3 | Pendente |
-| TEST-05 | Fase 3 | Pendente |
+| API-01 | Fase 1 | Pendente |
+| API-02 | Fase 1 | Pendente |
+| API-03 | Fase 1 | Pendente |
+| API-04 | Fase 1 | Pendente |
+| API-05 | Fase 1 | Pendente |
+| API-06 | Fase 1 | Pendente |
+| API-07 | Fase 1 | Pendente |
+| SEC-01 | Fase 1 | Pendente |
+| SEC-02 | Fase 1 | Pendente |
+| SEC-03 | Fase 1 | Pendente |
+| UI-01 | Fase 2 | Pendente |
+| UI-02 | Fase 2 | Pendente |
+| UI-03 | Fase 2 | Pendente |
+| UI-04 | Fase 2 | Pendente |
+| UI-05 | Fase 2 | Pendente |
+| DEPLOY-01 | Fase 2 | Pendente |
+| DEPLOY-02 | Fase 1 + Fase 2 | Pendente |
