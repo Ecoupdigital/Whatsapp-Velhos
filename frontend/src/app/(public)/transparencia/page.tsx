@@ -4,9 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchPortal } from "@/lib/portal";
 import type { PortalResponse } from "@/types/portal";
 import { SkeletonCard } from "@/components/ui";
-import { HeroCaixa, CaixaBloco, EventosBloco } from "@/components/portal";
-// Blocos restantes (preenchidos nos planos 006+):
-// import { JogosBloco } from "@/components/portal/JogosBloco";
+import { HeroCaixa, CaixaBloco, EventosBloco, JogosBloco } from "@/components/portal";
 
 export default function TransparenciaPage() {
   const [data, setData] = useState<PortalResponse | null>(null);
@@ -67,8 +65,7 @@ export default function TransparenciaPage() {
       <HeroCaixa meta={data.meta} caixa={data.caixa} />
       <CaixaBloco caixa={data.caixa} />
       <EventosBloco eventos={data.eventos} />
-      {/* PLANO 006: <JogosBloco jogos={data.jogos} /> */}
-      <section data-block="jogos" className="text-txt-secondary">[jogos]</section>
+      <JogosBloco jogos={data.jogos} />
 
       <footer className="pt-6 text-center font-body text-xs text-txt-tertiary">
         Velhos Parceiros F.C. - prestacao de contas em tempo real
