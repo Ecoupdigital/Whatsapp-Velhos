@@ -1,85 +1,91 @@
-# PROJECT: Eventos Galeto - Faixas multiplas + Relacao Cru/Assado
+# PROJECT: Portal de Transparência — Velhos Parceiros F.C.
+
+> Feature brownfield adicionada ao app existente (FastAPI + Next.js 14) do
+> Velhos Parceiros F.C. Briefing aprovado em 2026-06-04.
 
 ## What This Is
-
-Feature brownfield no app de gestao do time Velhos Parceiros F.C (FastAPI + Next.js).
-Estende o Sistema A de cartoes (na tela `/eventos/[id]`) para suportar:
-1. Multiplas faixas de cartao por jogador, nao-sequenciais, numeradas OU sem numero.
-2. Split por tipo de item (cru x assado) do que cada jogador vendeu e do seu pedido
-   pessoal, consolidado numa estatistica do evento para repassar a cozinha/fornecedor.
+Uma página pública única de prestação de contas. Diretoria e jogadores abrem um
+link aberto (sem login) e veem, em tempo real: dinheiro em caixa, fluxo financeiro
+do time, resultado líquido dos eventos (Galeto, Baile) e as estatísticas esportivas.
+Tudo agregado e read-only, sem expor nenhum dado sensível.
 
 ## Core Value
+Construir confiança via transparência. Um link aberto mostra os números do time
+em tempo real, sem nunca expor quem deve. Transparência financeira sem PII.
 
-Permitir gerir eventos tipo galeto com a realidade do campo: jogadores recebem cartoes
-em lotes quebrados ao longo do tempo, e a venda se divide em cru x assado. O gestor edita
-tudo numa planilha inline e tem na hora a relacao total para encomendar com a cozinha.
+## Requirements
 
-## Requirements - Active
+### Active
+- [ ] API-01: Router público `/api/portal` (sem auth) registrado em main.py
+- [ ] API-02: Endpoint `GET /api/portal` entrega pacote agregado completo numa request
+- [ ] API-03: Bloco `caixa` (saldo atual, total entrou/saiu, mês corrente, fluxo 12m)
+- [ ] API-04: Líquido por evento (arrecadado - custo) com `custo_origem`
+- [ ] API-05: Bloco `jogos` (V/E/D, gols, rankings, últimos resultados, próximos jogos)
+- [ ] API-06: Schemas Pydantic v2 `Portal*` para o contrato público
+- [ ] SEC-01: Atrasos sempre como COUNT agregado (mensalidades + jogadores), sem nomes
+- [ ] SEC-02: Nenhum nome de jogador ligado a pagamento no payload
+- [ ] SEC-03: Sem lista de transações nem PII no payload
+- [ ] UI-01: Route group público `(public)` sem guard de auth
+- [ ] UI-02: Página `/transparencia` renderiza os 4 blocos (hero, caixa, eventos, jogos)
+- [ ] UI-03: Gráfico de fluxo 12 meses com recharts e dado real
+- [ ] UI-04: Carimbo "atualizado em DD/MM HH:MM" + responsiva mobile
+- [ ] UI-05: Badges de atraso (N mensalidades, N jogadores), líquido em verde/vermelho
+- [ ] DEPLOY-01: `noindex` na página (robots index:false, follow:false)
+- [ ] DEPLOY-02: CORS inalterado, deploy na mesma pipeline Coolify
 
-- [ ] DB-01: Tabela `evento_cartao_faixa` (faixas numeradas/sem-numero por participante)
-- [ ] DB-02: Tabela `evento_participante_item` (split por tipo: qtd_vendido, qtd_pedido)
-- [ ] DB-03: Coluna `eventos.tipos_item` (JSON em Text)
-- [ ] DB-04: Relationships SQLAlchemy + cascade delete-orphan em participante
-- [ ] MIG-01: Migracao aditiva idempotente no boot (ALTER coluna + backfill faixas)
-- [ ] MIG-02: Backfill preserva contagem de recebidos por participante (validavel)
-- [ ] MIG-03: Compatibilidade Postgres + SQLite (Text JSON, ADD COLUMN via inspector)
-- [ ] MIG-05: Migracao estritamente aditiva (sem DROP/rename; colunas legadas intactas, verificavel via inspect)
-- [ ] API-01: CRUD faixas (GET/POST/PUT/DELETE) com validacao numerada/sem-numero
-- [ ] API-02: `qtd_cartoes_recebidos` derivado da soma das faixas (servidor)
-- [ ] API-03: PUT itens por tipo com upsert e validacao de fechamento c/ vendidos
-- [ ] API-04: `popular_elenco` cria faixa numerada por jogador (deriva recebidos)
-- [ ] API-05: `atualizar_cartoes` deixa de ser fonte de "recebidos" (mantem reconciliacao)
-- [ ] API-06: `resumo` agrega `itens_por_tipo` (relacao cru x assado consolidada)
-- [ ] API-07: Evento aceita/retorna `tipos_item` (serializacao JSON)
-- [ ] UI-01: Grid inline (planilha) de participantes com autosave + recalculo
-- [ ] UI-02: Sub-linha expansivel de faixas (add numerada / add sem numero / editar / remover)
-- [ ] UI-03: Colunas dinamicas por tipo (cru/assado) a partir de `tipos_item`
-- [ ] UI-04: Config do evento com campo "Tipos de item"
-- [ ] UI-05: Estatistica do evento com relacao consolidada cru x assado
-- [ ] UI-06: Tipos TS espelhando schemas Pydantic
-- [ ] TEST-01: Validar criterios de sucesso (dados intactos, faixas quebradas, fechamento)
-
-## Requirements - Out of Scope
-
-- Sistema B (`CartaoBaile` / tela `/cartoes`): nao tocar, candidato a deprecar depois.
-- Unicidade global de numero de cartao entre participantes (o modelo de faixas quebradas
-  nao sustenta; validacao so dentro do mesmo participante).
-- Dropar colunas legadas `numero_inicio`/`numero_fim`/`qtd_cartoes_recebidos` (mantidas p/ rollback).
-- Multi-usuario/roles novos (app continua single admin).
-- Gerar numero fake para lotes sem numero.
-- Sistema de migracao versionado (Alembic): YAGNI; migracao aditiva idempotente no boot basta.
+### Out of Scope (YAGNI)
+- PIN/senha/login no portal (decisão: link totalmente aberto)
+- Snapshot/publicação manual (decisão: tempo real, lê o banco direto)
+- Painel de configuração do portal
+- Export PDF / impressão
+- Paginação de histórico de eventos
+- Multi-idioma e light mode
+- Qualquer coleta de dado nova / endpoint de escrita
+- Mudança no modelo de auth interno do app
 
 ## Context
 
-- **Stack (preservada):** FastAPI + SQLAlchemy 2 + Postgres(prod)/SQLite(dev), Next.js App Router + Tailwind, Pydantic v2, react-hot-toast, UI kit `@/components/ui`.
-- **Schema bootstrap:** `Base.metadata.create_all` em `main.py:19` cria tabelas novas mas NAO adiciona colunas. Por isso `tipos_item` exige migracao explicita.
-- **Sem sistema de migracao hoje:** introduzimos `backend/migrations.py` (`run_additive_migrations`) chamado no boot, idempotente.
-- **Reconciliacao existente:** `vendidos+devolvidos+pagou_custo <= recebidos` (manter).
-- **Codebase analisado:** `models.py`, `routers/eventos.py`, `routers/cartoes.py`, `schemas.py`, `database.py`, `main.py`, `eventos/[id]/page.tsx`, `types/index.ts`, `migrate_sqlite_to_postgres.py`.
-- **Credenciais/APIs:** nenhuma nova. Feature interna.
+**Tipo:** Brownfield. App em produção (Velhos Parceiros F.C.), feature aditiva.
+
+**Stack (respeitada, do codebase existente):**
+- Backend: FastAPI + SQLAlchemy + Pydantic v2, SQLite (dev) / Postgres (prod)
+- Frontend: Next.js 14.2 App Router + TypeScript + Tailwind (dark, brand.red #E31E24)
+- Gráfico: recharts ^3.8 (já instalado). Animação: framer-motion ^12. Ícones: lucide-react
+- Deploy: Coolify. Front app.velhosparceiros.com.br, back velhos-backend.ecoup.digital
+
+**Sem libs novas.** Tudo necessário já está instalado.
+
+**Reuso de lógica existente (confirmado no código):**
+- `_calcular_saldo_atual` (routers/contas.py) para saldo por conta
+- `financeiro.balanco` (entradas_mes/saidas_mes) e `financeiro.fluxo_mensal` (fluxo 12m)
+- `jogos.estatisticas` (V/E/D + gols) e `jogos.rankings` (`_parse_entries`)
+- `eventos.resumo_evento` (`sum(valor_pago)` por participante = arrecadado)
+
+**Sem pesquisa de ecossistema:** todas as tecnologias já existem e estão validadas em
+produção. Não há tecnologia nova a pesquisar.
 
 ## Constraints
-
-- Migracao SO aditiva. Backfill idempotente (rodavel 2x sem duplicar). Rollback possivel.
-- Funcionar em Postgres E SQLite (Text JSON, sem JSONB; ADD COLUMN via inspector; bool como 0/1 int).
-- Seguir convencoes do codebase (snake_case backend, camelCase FE, datas Text ISO, bool 0/1).
-- Edicao estilo planilha (grid inline autosave), sem modal pesado (restricao do usuario).
-- pt-BR sem em-dash/en-dash. Construir pra durar, sem over-engineering (YAGNI).
+- Stack travada no que já existe (não trocar framework/ORM/libs)
+- Sem migration de banco (feature é read-only)
+- Sem mudança de CORS (front chama `/api` same-origin via rewrite)
+- Sem variável de ambiente nova
+- pt-BR com acentuação correta. Sem em-dash.
+- Seguir convenções do codebase (router por arquivo, schemas em schemas.py,
+  route group para separar público/protegido no front)
 
 ## Key Decisions
 
-| Decisao | Outcome | Justificativa |
+| Decisão | Outcome | Justificativa |
 |---------|---------|---------------|
-| 2 tabelas novas + 1 coluna nova | Do usuario (briefing) | design aprovado |
-| Lote sem numero nao gera numero fake | Do usuario (briefing) | evita colisao com numeros reais |
-| Nao dropar colunas legadas | Do usuario (briefing) | rollback |
-| `recebidos` derivado da soma de faixas | Do usuario (briefing) | fonte unica de verdade |
-| Migracao no boot via `migrations.py` (nao Alembic) | Decisao do arquiteto | projeto nao usa migracao versionada; aditiva idempotente no boot e consistente com a escolha de centralizar tudo no app (sem cron host). Alembic seria over-engineering aqui |
-| ADD COLUMN via `inspector` (checar antes) | Decisao do arquiteto | `IF NOT EXISTS` nao e uniforme entre SQLite/Postgres; inspecionar e portavel e idempotente |
-| JSON como Text + json.dumps/loads (nao JSONB) | Decisao do arquiteto | unico jeito que funciona identico em Postgres e SQLite (restricao do usuario) |
-| `sem_numero` como Integer 0/1 | Decisao do arquiteto | segue padrao do projeto (`pago`, `ativo`); evita Boolean nativo divergente entre bancos |
-| PUT itens = substituicao total da lista | Decisao do arquiteto | semantica PUT previsivel para a grid; tipos omitidos sao removidos |
-| Validacao de unicidade de numero so dentro do participante | Decisao do arquiteto | faixas quebradas tornam unicidade global impraticavel; YAGNI |
-| `(participante, tipo)` unico | Decisao do arquiteto | um item por tipo por jogador; PUT faz upsert |
-| `tipos_item` desserializado via field_validator em EventoOut | Decisao do arquiteto | centraliza json.loads; nao precisa tocar todos os endpoints que retornam Evento |
-| Backfill idempotente por "participante sem faixa" | Decisao do arquiteto | rodavel 2x sem duplicar, simples de raciocinar |
+| Link totalmente aberto, sem login nem PIN | Do usuário (briefing) | Transparência máxima; portal é prestação de contas pública |
+| `noindex` em vez de robots.txt global | Do usuário (briefing) | Não indexar no Google sem bloquear acesso direto |
+| Tempo real (lê banco direto), sem snapshot | Do usuário (briefing) | Sempre atualizado, zero trabalho manual |
+| Atraso só como COUNT, sem nomes | Do usuário (briefing) | Trava de privacidade dura: nunca expor quem deve |
+| 1 endpoint agregador (não vários) | Do usuário (briefing) | Uma request entrega o portal inteiro, front simples |
+| Router público sem `Depends(get_current_user)` | Do usuário (briefing) | Padrão do app: rota fica pública não passando a dependência |
+| Route group `(public)` fora de `(app)` | Do usuário (briefing) | Não herda o guard client-side do `(app)/layout.tsx` |
+| Custo = custo_real se >0 senão estimado, com `custo_origem` | Do usuário (briefing) | Front rotula "custo" / "custo previsto" / "a confirmar" |
+| Filtrar eventos `concluido`+`em_andamento` (planejado só se arrecadou) | Decisão do arquiteto | Briefing pede "concluídos e em andamento"; planejado sem arrecadação polui; cancelado sai |
+| Schemas com prefixo `Portal*` próprios | Decisão do arquiteto | Isola o contrato público; estável e independente dos schemas internos |
+| `meta.atualizado_em` em ISO no payload, formatação no front | Decisão do arquiteto | Backend entrega dado bruto, front decide DD/MM HH:MM em BRT |
+| `ultimos_resultados`/`proximos_jogos` derivados de `realizado` | Decisão do arquiteto | Campo `realizado` já separa jogos passados de futuros |

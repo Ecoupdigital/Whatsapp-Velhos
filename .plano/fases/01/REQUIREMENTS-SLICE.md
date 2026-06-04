@@ -1,37 +1,56 @@
-# Requisitos da Fase 01
+# Requisitos da Fase 01 — Backend API pública
 
-> Slice gerado automaticamente. Versao completa em `.plano/REQUIREMENTS.md`.
-> Design detalhado em `.plano/SYSTEM-DESIGN.md` secoes 3 e 6.
+> Slice gerado automaticamente. Versão completa em `.plano/REQUIREMENTS.md`.
 
-## DB-01: Tabela `evento_cartao_faixa`
-Modelo SQLAlchemy `EventoCartaoFaixa` em `backend/models.py`: `id`, `evento_participante_id` (FK CASCADE para `evento_participantes.id`), `numero_inicio` (Integer null), `numero_fim` (Integer null), `quantidade` (Integer not null), `sem_numero` (Integer 0/1 default 0), `created_at` (Text ISO). Indice `ix_faixa_participante` em `evento_participante_id`.
+## API-01: Router público registrado
+`backend/routers/portal.py` com `prefix="/api/portal"`, registrado em `main.py`
+via `app.include_router(portal.router)`. SEM `Depends(get_current_user)`.
+*Testável:* `GET /api/portal` retorna 200 sem header `Authorization`.
 
-## DB-02: Tabela `evento_participante_item`
-Modelo `EventoParticipanteItem`: `id`, `evento_participante_id` (FK CASCADE), `tipo` (Text not null), `qtd_vendido` (Integer default 0), `qtd_pedido` (Integer default 0). Indice unico `(evento_participante_id, tipo)` + indice `ix_item_participante`.
+## API-02: Pacote agregado numa request
+`GET /api/portal` entrega `meta`, `caixa`, `eventos`, `jogos` no nível raiz.
+*Testável:* o JSON contém exatamente essas 4 chaves de topo.
 
-## DB-03: Coluna `eventos.tipos_item`
-Adicionar `tipos_item = Column(Text)` em `class Evento` (JSON serializado, ex `'["cru","assado"]'`, nullable).
+## API-03: Bloco caixa
+`saldo_atual` (soma `_calcular_saldo_atual` das contas ativas), `total_entrou`,
+`total_saiu`, `entrou_mes`, `saiu_mes`, `fluxo_12m` (≤12 itens `{mes, entradas, saidas}`),
+`atrasos`.
+*Testável:* `saldo_atual` bate com soma manual; `fluxo_12m` ≤ 12 itens.
 
-## DB-04: Relationships
-Em `EventoParticipante`: `faixas` e `itens` com `cascade="all, delete-orphan"`, `order_by` por id, `back_populates`. Nos novos modelos, `participante = relationship(..., back_populates=...)`.
+## API-04: Líquido por evento
+Cada evento: `titulo, tipo, data, arrecadado, custo, custo_origem, liquido, status`.
+`custo` = `custo_real` se >0 senão `custo_estimado`; `custo_origem` ∈ {real, estimado,
+sem_custo}; `liquido = arrecadado - custo`. `arrecadado` = `sum(valor_pago)` dos participantes.
+*Testável:* `custo_real > 0` → `custo_origem == "real"` e `liquido == arrecadado - custo_real`.
 
-## MIG-01: `backend/migrations.py`
-Funcao `run_additive_migrations(engine)` chamada em `main.py` logo apos `Base.metadata.create_all(bind=engine)`. Usa `sqlalchemy.inspect(engine)` para checar se `tipos_item` existe em `eventos`; se nao, `ALTER TABLE eventos ADD COLUMN tipos_item TEXT` dentro de `engine.begin()`. Em seguida chama `_backfill_faixas(engine)`.
+## API-05: Bloco jogos
+`resumo` (vitorias, empates, derrotas, gols_pro, gols_contra), `artilharia`,
+`assistencias`, `destaques` (`{nome, quantidade}`), `ultimos_resultados`
+(`{data, adversario, placar}`), `proximos_jogos` (`{data, horario, local, adversario}`).
+*Testável:* `resumo` bate com `/api/jogos/estatisticas`; rankings com `/api/jogos/rankings`.
 
-## MIG-02: Backfill idempotente
-Para cada `EventoParticipante` que ainda nao tem nenhuma faixa (count == 0): se `numero_inicio` e `numero_fim` preenchidos -> 1 faixa numerada (`sem_numero=0`, `quantidade=fim-ini+1`); senao se `qtd_cartoes_recebidos > 0` -> 1 faixa `sem_numero=1` com `quantidade=qtd_cartoes_recebidos`; senao nada. A checagem "ja tem faixa" garante idempotencia.
+## API-06: Schemas Pydantic v2
+Models `Portal*` em `schemas.py`; endpoint usa `response_model=PortalResponse`.
+*Testável:* a resposta valida contra `PortalResponse`.
 
-## MIG-03: Compatibilidade Postgres + SQLite
-`ALTER TABLE ... ADD COLUMN ... TEXT` (valido nos dois). Checagem via inspector (nao usar `IF NOT EXISTS`). JSON como Text (nao JSONB). `sem_numero` como Integer 0/1 (nao Boolean nativo). `created_at` Text ISO.
+## API-07: Filtro de eventos
+Inclui `concluido` e `em_andamento`; `planejado` só se `arrecadado > 0`; exclui
+`cancelado`; ordena por data desc.
+*Testável:* evento `cancelado` não aparece; `planejado` com 0 arrecadado não aparece.
 
-## MIG-04: Contagem preservada
-Pos-migracao, para todo participante `sum(faixas.quantidade) == qtd_cartoes_recebidos` legado. Verificavel por assert/script.
+## SEC-01: Atrasos como COUNT
+`atrasos.mensalidades` = COUNT mensalidades `status='atrasado'` no mês corrente;
+`atrasos.jogadores` = COUNT DISTINCT `jogador_id`. Ambos `int`.
+*Testável:* os dois campos são inteiros; nenhuma lista de mensalidades retornada.
 
-## MIG-05: Migracao estritamente aditiva
-Sem DROP nem rename de tabelas/colunas existentes. Colunas legadas (`numero_inicio`, `numero_fim`, `qtd_cartoes_recebidos` do EventoParticipante) permanecem intactas. Verificavel: o schema pos-migracao contem TODAS as colunas pre-migracao (assert via `inspect()` comparando o conjunto de colunas antes e depois).
+## SEC-02: Sem nome em contexto financeiro
+Nenhum nome de jogador ligado a pagamento. Nome só em `jogos.*` (rankings).
+*Testável:* varredura do payload não acha nome fora de `jogos.*`.
 
-## TEST-01: Dados intactos
-Contagem de recebidos por participante igual antes e depois da migracao.
+## SEC-03: Sem PII / sem transações cruas
+Payload não contém `transacoes[]`, `participantes[]`, telefone, nem registro cru.
+*Testável:* nenhuma chave expõe transação individual ou PII.
 
-## TEST-06: Idempotencia
-`run_additive_migrations` rodada 2x nao duplica faixas nem falha no ADD COLUMN.
+## DEPLOY-02 (parte CORS): CORS inalterado
+`main.py` mantém a allowlist de CORS atual; sem migration nova.
+*Testável:* allowlist de CORS intacta; nenhuma migration adicionada.
