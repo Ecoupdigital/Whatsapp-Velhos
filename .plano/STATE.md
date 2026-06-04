@@ -7,10 +7,10 @@
 
 ## Posição Atual
 **Fase:** 1 de 2
-**Plano:** 1 de 3 (01-001 concluido)
+**Plano:** 2 de 3 (01-001 e 01-002 concluidos)
 **Status:** Em andamento
-**Progresso:** [██░░░░░░░░] 33%
-**Requisitos:** API-06, SEC-01, SEC-03 (marcados completos no 01-001)
+**Progresso:** [████░░░░░░] 66%
+**Requisitos:** API-01, API-02, API-03, API-04, API-05, API-06, API-07, SEC-01, SEC-02, SEC-03, DEPLOY-02 (marcados completos)
 
 ## Contexto Acumulado
 
@@ -30,10 +30,11 @@ Ver PROJECT.md Key Decisions e SYSTEM-DESIGN.md. Destaques:
 
 ### Planos Completos
 - **01-001** (2026-06-04): Schemas Portal* (11 models Pydantic v2) + scaffold test_portal.py com fixture seed_portal_data. Commit: 7aeaf6f.
+- **01-002** (2026-06-04): Router publico GET /api/portal (handler agregador read-only). meta.atualizado_em timezone-aware UTC. Prova: 200 sem token, 4 chaves, atrasos int. Commit: 1a41fb8.
 
 ### Bloqueios
 Nenhum.
 
 ## Continuidade de Sessão
 Modo builder brownfield ativo. Feature escopada SÓ ao Portal de Transparência.
-Plano 01-001 concluído. Próximo: 01-002 (router portal.py + endpoint GET /api/portal).
+Plano 01-002 concluído. Próximo: 01-003 (suite de testes test_portal.py).
