@@ -29,7 +29,7 @@ export function HeroCaixa({ meta, caixa }: HeroCaixaProps) {
         height={64}
       />
       <h1 className="font-display text-xl font-bold tracking-tight text-txt-primary">
-        Velhos Parceiros F.C.
+        {meta.time_nome}
       </h1>
       <p className="font-body text-xs uppercase tracking-[0.2em] text-txt-secondary">
         Prestacao de Contas
