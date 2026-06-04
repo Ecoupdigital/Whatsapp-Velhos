@@ -127,3 +127,172 @@ def seed_portal_data(TestingSession):
 def test_schemas_portal_importam_e_shape_topo():
     from schemas import PortalResponse
     assert set(PortalResponse.model_fields.keys()) == {"meta", "caixa", "eventos", "jogos"}
+
+
+# --- API-01 / API-02: responde 200 sem token, com as 4 chaves de topo ---
+
+def test_portal_responde_200_sem_token(client, seed_portal_data):
+    r = client.get("/api/portal")  # sem header Authorization
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert set(body.keys()) == {"meta", "caixa", "eventos", "jogos"}
+
+
+def test_portal_meta(client, seed_portal_data):
+    body = client.get("/api/portal").json()
+    assert body["meta"]["time_nome"] == "Velhos Parceiros F.C."
+    assert isinstance(body["meta"]["atualizado_em"], str) and body["meta"]["atualizado_em"]
+
+
+# --- API-03: bloco caixa ---
+
+def test_portal_caixa_saldo_e_totais(client, seed_portal_data):
+    exp = seed_portal_data
+    caixa = client.get("/api/portal").json()["caixa"]
+    assert caixa["saldo_atual"] == exp["saldo_atual"]
+    assert caixa["total_entrou"] == exp["total_entrou"]
+    assert caixa["total_saiu"] == exp["total_saiu"]
+    assert caixa["entrou_mes"] == exp["entrou_mes"]
+    assert caixa["saiu_mes"] == exp["saiu_mes"]
+
+
+def test_portal_fluxo_12m_max_12_itens(client, seed_portal_data):
+    fluxo = client.get("/api/portal").json()["caixa"]["fluxo_12m"]
+    assert len(fluxo) <= 12
+    # ordem cronologica asc
+    meses = [f["mes"] for f in fluxo]
+    assert meses == sorted(meses)
+    for f in fluxo:
+        assert set(f.keys()) == {"mes", "entradas", "saidas"}
+
+
+# --- SEC-01: atrasos sao COUNT inteiros ---
+
+def test_portal_atrasos_count_int(client, seed_portal_data):
+    exp = seed_portal_data
+    atrasos = client.get("/api/portal").json()["caixa"]["atrasos"]
+    assert isinstance(atrasos["mensalidades"], int)
+    assert isinstance(atrasos["jogadores"], int)
+    assert atrasos["mensalidades"] == exp["atrasos_mensalidades"]   # 2
+    assert atrasos["jogadores"] == exp["atrasos_jogadores"]         # 2
+    # garante que nao virou bool (bool e subclasse de int em python)
+    assert not isinstance(atrasos["mensalidades"], bool)
+
+
+# --- API-04 / API-07: eventos (liquido + filtro) ---
+
+def test_portal_evento_liquido_e_custo_origem(client, seed_portal_data):
+    exp = seed_portal_data
+    eventos = client.get("/api/portal").json()["eventos"]
+    titulos = {e["titulo"] for e in eventos}
+    # cancelado e planejado-sem-arrecadacao nao aparecem
+    assert "Baile Cancelado" not in titulos
+    assert "Viagem Futura" not in titulos
+    assert "Galeto Junho" in titulos
+    galeto = next(e for e in eventos if e["titulo"] == "Galeto Junho")
+    assert galeto["arrecadado"] == exp["evento_ok_arrecadado"]   # 400
+    assert galeto["custo"] == exp["evento_ok_custo"]             # 200 (custo_real > 0)
+    assert galeto["custo_origem"] == "real"
+    assert galeto["liquido"] == exp["evento_ok_liquido"]         # 200
+    assert galeto["liquido"] == galeto["arrecadado"] - galeto["custo"]
+
+
+# --- API-05: jogos ---
+
+def test_portal_jogos_resumo_e_rankings(client, seed_portal_data):
+    jogos = client.get("/api/portal").json()["jogos"]
+    resumo = jogos["resumo"]
+    # seed: 1 vitoria (3x1), 1 derrota (0x2)
+    assert resumo["vitorias"] == 1
+    assert resumo["empates"] == 0
+    assert resumo["derrotas"] == 1
+    assert resumo["gols_pro"] == 3
+    assert resumo["gols_contra"] == 3
+    # artilharia: Carlao (2), Pedrinho (1)
+    art = {e["nome"]: e["quantidade"] for e in jogos["artilharia"]}
+    assert art.get("Carlao") == 2
+    assert art.get("Pedrinho") == 1
+    # ranking ordenado desc
+    qts = [e["quantidade"] for e in jogos["artilharia"]]
+    assert qts == sorted(qts, reverse=True)
+
+
+def test_portal_resultados_e_proximos(client, seed_portal_data):
+    jogos = client.get("/api/portal").json()["jogos"]
+    # ultimos_resultados: realizados, recentes primeiro, placar "GFxGC"
+    placares = {r["adversario"]: r["placar"] for r in jogos["ultimos_resultados"]}
+    assert placares["Time A"] == "3x1"
+    assert placares["Time B"] == "0x2"
+    datas = [r["data"] for r in jogos["ultimos_resultados"]]
+    assert datas == sorted(datas, reverse=True)
+    # proximos_jogos: futuro (2099) presente, com horario/local
+    prox = {p["adversario"]: p for p in jogos["proximos_jogos"]}
+    assert "Time C" in prox
+    assert prox["Time C"]["horario"] == "15:00"
+    assert prox["Time C"]["local"] == "Estadio"
+
+
+# --- SEC-02 / SEC-03: trava de privacidade (varredura do payload) ---
+
+def _coletar_strings(obj):
+    """Coleta recursivamente todas as strings de um objeto JSON (dict/list/str)."""
+    out = []
+    if isinstance(obj, dict):
+        for v in obj.values():
+            out.extend(_coletar_strings(v))
+    elif isinstance(obj, list):
+        for v in obj:
+            out.extend(_coletar_strings(v))
+    elif isinstance(obj, str):
+        out.append(obj)
+    return out
+
+
+def _coletar_chaves(obj):
+    """Coleta recursivamente todas as chaves de dict de um objeto JSON."""
+    out = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            out.append(k)
+            out.extend(_coletar_chaves(v))
+    elif isinstance(obj, list):
+        for v in obj:
+            out.extend(_coletar_chaves(v))
+    return out
+
+
+def test_privacidade_nenhum_nome_de_jogador_fora_de_jogos(client, seed_portal_data):
+    exp = seed_portal_data
+    body = client.get("/api/portal").json()
+
+    # remove o bloco jogos: nome de jogador em ranking e nome de adversario (time) sao permitidos la
+    sem_jogos = {k: v for k, v in body.items() if k != "jogos"}
+    strings_financeiras = _coletar_strings(sem_jogos)
+    blob = " ".join(strings_financeiras)
+
+    for nome in exp["nomes_jogadores"]:   # ["Carlao", "Pedrinho"]
+        assert nome not in blob, (
+            f"VAZAMENTO: nome de jogador '{nome}' apareceu em contexto financeiro: {strings_financeiras}"
+        )
+
+
+def test_privacidade_sem_chaves_de_pii_nem_registro_cru(client, seed_portal_data):
+    body = client.get("/api/portal").json()
+    chaves = set(_coletar_chaves(body))
+    proibidas = {
+        "telefone", "transacoes", "participantes", "mensalidades_lista",
+        "jogador_id", "valor_pago", "data_pagamento", "forma_pagto",
+        "nome_avulso", "apelido", "password_hash", "comprovante",
+    }
+    vazadas = chaves & proibidas
+    assert not vazadas, f"chaves de PII/registro cru no payload: {vazadas}"
+
+
+def test_privacidade_atrasos_sao_int_nunca_lista(client, seed_portal_data):
+    atrasos = client.get("/api/portal").json()["caixa"]["atrasos"]
+    assert set(atrasos.keys()) == {"mensalidades", "jogadores"}
+    assert isinstance(atrasos["mensalidades"], int) and not isinstance(atrasos["mensalidades"], bool)
+    assert isinstance(atrasos["jogadores"], int) and not isinstance(atrasos["jogadores"], bool)
+    # nenhum valor de atrasos pode ser lista/dict
+    assert not isinstance(atrasos["mensalidades"], (list, dict))
+    assert not isinstance(atrasos["jogadores"], (list, dict))
