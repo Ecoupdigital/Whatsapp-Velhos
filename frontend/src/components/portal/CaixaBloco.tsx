@@ -5,7 +5,7 @@ import { Wallet, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils";
 import type { PortalCaixa } from "@/types/portal";
-// Plano 004: import { FluxoChart } from "@/components/portal/FluxoChart";
+import { FluxoChart } from "./FluxoChart";
 
 interface CaixaBlocoProps {
   caixa: PortalCaixa;
@@ -47,9 +47,8 @@ export function CaixaBloco({ caixa }: CaixaBlocoProps) {
         </Card>
       </div>
 
-      {/* Plano 004 substitui por <FluxoChart fluxo={caixa.fluxo_12m} /> */}
-      <div data-slot="fluxo" className="text-txt-tertiary">
-        [grafico fluxo 12m]
+      <div data-slot="fluxo">
+        <FluxoChart fluxo={caixa.fluxo_12m} />
       </div>
 
       <div className="flex flex-wrap gap-2">
