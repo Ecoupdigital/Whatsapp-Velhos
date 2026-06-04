@@ -296,3 +296,89 @@ def test_privacidade_atrasos_sao_int_nunca_lista(client, seed_portal_data):
     # nenhum valor de atrasos pode ser lista/dict
     assert not isinstance(atrasos["mensalidades"], (list, dict))
     assert not isinstance(atrasos["jogadores"], (list, dict))
+
+
+# --- Regressao: correcoes de numeros publicos (code review) ---
+
+def test_atrasos_conta_pendente_vencido(client, TestingSession):
+    """#1: mensalidade 'pendente' do mes corrente ja vencida conta como atraso.
+
+    O status 'atrasado' e materializado de forma lazy (so ao listar mensalidades);
+    o portal nao pode subnotificar inadimplencia esperando essa materializacao.
+    """
+    db = TestingSession()
+    try:
+        mes = _mes_corrente()
+        # vencimento no dia 1: se hoje > dia 1, o mes corrente ja venceu
+        db.add(Configuracao(chave="dia_vencimento", valor="1"))
+        j = Jogador(nome="Fulano", tipo="jogador", ativo=1)
+        db.add(j)
+        db.flush()
+        db.add(Mensalidade(jogador_id=j.id, mes_referencia=mes, valor=60.0, status="pendente"))
+        db.commit()
+    finally:
+        db.close()
+
+    atrasos = client.get("/api/portal").json()["caixa"]["atrasos"]
+    if datetime.now().day > 1:  # mes ja venceu
+        assert atrasos["mensalidades"] == 1  # pendente vencido entra no count
+        assert atrasos["jogadores"] == 1
+    else:  # dia 1: ainda nao venceu
+        assert atrasos["mensalidades"] == 0
+
+
+def test_totais_excluem_transferencia_interna(client, TestingSession):
+    """#2: transferencia interna (par saida+entrada) nao infla total_entrou/total_saiu/fluxo."""
+    db = TestingSession()
+    try:
+        mes = _mes_corrente()
+        c1 = Conta(nome="Caixa", tipo="dinheiro", saldo_inicial=0.0, ativo=1)
+        c2 = Conta(nome="Banco", tipo="banco", saldo_inicial=0.0, ativo=1)
+        db.add_all([c1, c2])
+        db.flush()
+        # entrada real de 100
+        db.add(Transacao(tipo="entrada", categoria="mensalidade", valor=100.0,
+                         data=f"{mes}-05", conta_id=c1.id))
+        # transferencia 100 c1 -> c2 (par saida+entrada que se anula)
+        db.add(Transacao(tipo="saida", categoria="transferencia", valor=100.0,
+                         data=f"{mes}-06", conta_id=c1.id))
+        db.add(Transacao(tipo="entrada", categoria="transferencia", valor=100.0,
+                         data=f"{mes}-06", conta_id=c2.id))
+        db.commit()
+    finally:
+        db.close()
+
+    caixa = client.get("/api/portal").json()["caixa"]
+    assert caixa["total_entrou"] == 100.0   # so a entrada real
+    assert caixa["total_saiu"] == 0.0        # transferencia nao conta como saida
+    assert caixa["entrou_mes"] == 100.0
+    assert caixa["saiu_mes"] == 0.0
+    mes_no_fluxo = [f for f in caixa["fluxo_12m"] if f["mes"] == mes]
+    assert mes_no_fluxo and mes_no_fluxo[0]["entradas"] == 100.0
+    assert mes_no_fluxo[0]["saidas"] == 0.0
+    # saldo segue coerente (transferencia se anula entre contas ativas)
+    assert caixa["saldo_atual"] == 100.0
+
+
+def test_gols_nulos_nao_quebram_resumo(client, TestingSession):
+    """#3: jogo realizado com placar NULL nao derruba o endpoint publico (coalesce)."""
+    db = TestingSession()
+    try:
+        db.add(Jogo(data="2025-03-01", adversario="Sem Placar",
+                    gols_favor=None, gols_contra=None, realizado=1))
+        db.add(Jogo(data="2025-03-02", adversario="Normal",
+                    gols_favor=2, gols_contra=0, realizado=1))
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.get("/api/portal")
+    assert r.status_code == 200, r.text
+    jogos = r.json()["jogos"]
+    # jogo NULL tratado como 0x0 (empate); jogo normal 2x0 (vitoria)
+    assert jogos["resumo"]["vitorias"] == 1
+    assert jogos["resumo"]["empates"] == 1
+    assert jogos["resumo"]["gols_pro"] == 2
+    assert jogos["resumo"]["gols_contra"] == 0
+    placares = {x["adversario"]: x["placar"] for x in jogos["ultimos_resultados"]}
+    assert placares["Sem Placar"] == "0x0"

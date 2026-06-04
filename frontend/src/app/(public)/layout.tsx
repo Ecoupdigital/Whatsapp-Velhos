@@ -24,7 +24,7 @@ export default function PublicLayout({
             height={36}
           />
           <span className="font-display text-base font-semibold tracking-tight text-txt-primary">
-            Velhos Parceiros F.C.
+            Prestacao de Contas
           </span>
         </div>
       </header>

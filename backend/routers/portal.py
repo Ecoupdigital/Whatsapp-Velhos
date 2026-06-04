@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
+from calendar import monthrange
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends
@@ -27,6 +28,24 @@ def _montar_meta(db: Session) -> PortalMeta:
     )
 
 
+def _mes_vencido(db: Session, mes: str, hoje: date) -> bool:
+    """True se hoje ja passou do dia de vencimento do mes.
+
+    Espelha a regra de routers.mensalidades._atualizar_atrasados, mas SEM escrever
+    no banco (este endpoint e um GET publico read-only).
+    """
+    cfg = db.query(Configuracao).filter(Configuracao.chave == "dia_vencimento").first()
+    dia_venc = int(cfg.valor) if cfg and cfg.valor else 15
+    try:
+        ano, mes_num = mes.split("-")
+        ultimo_dia = monthrange(int(ano), int(mes_num))[1]
+        dia_real = min(dia_venc, ultimo_dia)
+        data_venc = date(int(ano), int(mes_num), dia_real)
+    except (ValueError, IndexError):
+        return False
+    return hoje > data_venc
+
+
 def _montar_caixa(db: Session) -> PortalCaixa:
     now = datetime.now()
     mes_atual = now.strftime("%Y-%m")
@@ -35,22 +54,28 @@ def _montar_caixa(db: Session) -> PortalCaixa:
     contas = db.query(Conta).filter(Conta.ativo == 1).all()
     saldo_atual = sum(_calcular_saldo_atual(db, c) for c in contas)
 
+    # total_entrou/total_saiu = dinheiro que de fato entrou/saiu do clube.
+    # Exclui transferencia interna entre contas (gera par saida+entrada que se
+    # anula e inflaria os dois totais sem movimentar caixa real).
+    nao_transferencia = Transacao.categoria != "transferencia"
+
     total_entrou = db.query(func.coalesce(func.sum(Transacao.valor), 0)).filter(
-        Transacao.tipo == "entrada"
+        Transacao.tipo == "entrada", nao_transferencia
     ).scalar()
     total_saiu = db.query(func.coalesce(func.sum(Transacao.valor), 0)).filter(
-        Transacao.tipo == "saida"
+        Transacao.tipo == "saida", nao_transferencia
     ).scalar()
 
     entrou_mes = db.query(func.coalesce(func.sum(Transacao.valor), 0)).filter(
-        Transacao.tipo == "entrada", Transacao.data.like(f"{mes_atual}%")
+        Transacao.tipo == "entrada", nao_transferencia, Transacao.data.like(f"{mes_atual}%")
     ).scalar()
     saiu_mes = db.query(func.coalesce(func.sum(Transacao.valor), 0)).filter(
-        Transacao.tipo == "saida", Transacao.data.like(f"{mes_atual}%")
+        Transacao.tipo == "saida", nao_transferencia, Transacao.data.like(f"{mes_atual}%")
     ).scalar()
 
-    # fluxo dos ultimos 12 meses (ordem cronologica asc), replicando financeiro.fluxo_mensal
-    transacoes = db.query(Transacao).order_by(Transacao.data).all()
+    # fluxo dos ultimos 12 meses (ordem cronologica asc). Tambem exclui
+    # transferencia interna, pra os dois lados do grafico refletirem caixa real.
+    transacoes = db.query(Transacao).filter(nao_transferencia).order_by(Transacao.data).all()
     fluxo: dict[str, dict[str, float]] = {}
     for t in transacoes:
         mes = t.data[:7] if t.data else None
@@ -67,14 +92,19 @@ def _montar_caixa(db: Session) -> PortalCaixa:
         for m in ult_12
     ]
 
-    # atrasos (privacidade: COUNT puro, sem nomes)
+    # atrasos (privacidade: COUNT puro, sem nomes).
+    # O status 'atrasado' so e materializado de forma lazy quando o admin lista as
+    # mensalidades do mes (mensalidades._atualizar_atrasados). Se o mes ja venceu,
+    # uma mensalidade ainda gravada como 'pendente' tambem esta em atraso, entao
+    # contamos os dois estados pra nao subnotificar inadimplencia no portal publico.
+    status_atraso = ["pendente", "atrasado"] if _mes_vencido(db, mes_atual, now.date()) else ["atrasado"]
     n_mensalidades = db.query(func.count(Mensalidade.id)).filter(
-        Mensalidade.status == "atrasado",
         Mensalidade.mes_referencia == mes_atual,
+        Mensalidade.status.in_(status_atraso),
     ).scalar()
     n_jogadores = db.query(func.count(func.distinct(Mensalidade.jogador_id))).filter(
-        Mensalidade.status == "atrasado",
         Mensalidade.mes_referencia == mes_atual,
+        Mensalidade.status.in_(status_atraso),
     ).scalar()
 
     return PortalCaixa(
@@ -135,11 +165,13 @@ def _montar_eventos(db: Session) -> list[PortalEvento]:
 def _montar_jogos(db: Session) -> PortalJogos:
     realizados = db.query(Jogo).filter(Jogo.realizado == 1).all()
 
-    vitorias = sum(1 for j in realizados if j.gols_favor > j.gols_contra)
-    empates = sum(1 for j in realizados if j.gols_favor == j.gols_contra)
-    derrotas = sum(1 for j in realizados if j.gols_favor < j.gols_contra)
-    gols_pro = sum(j.gols_favor for j in realizados)
-    gols_contra = sum(j.gols_contra for j in realizados)
+    # gols_favor/gols_contra sao nullable (so default=0); coalesce pra None nao
+    # derrubar o endpoint publico inteiro com TypeError num registro sem placar.
+    vitorias = sum(1 for j in realizados if (j.gols_favor or 0) > (j.gols_contra or 0))
+    empates = sum(1 for j in realizados if (j.gols_favor or 0) == (j.gols_contra or 0))
+    derrotas = sum(1 for j in realizados if (j.gols_favor or 0) < (j.gols_contra or 0))
+    gols_pro = sum((j.gols_favor or 0) for j in realizados)
+    gols_contra = sum((j.gols_contra or 0) for j in realizados)
 
     artilharia: dict[str, int] = defaultdict(int)
     assist: dict[str, int] = defaultdict(int)
@@ -164,7 +196,7 @@ def _montar_jogos(db: Session) -> PortalJogos:
         PortalResultado(
             data=j.data,
             adversario=j.adversario,
-            placar=f"{j.gols_favor}x{j.gols_contra}",
+            placar=f"{j.gols_favor or 0}x{j.gols_contra or 0}",
         ) for j in ult
     ]
 
