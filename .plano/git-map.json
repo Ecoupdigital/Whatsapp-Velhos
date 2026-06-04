@@ -1,33 +1,51 @@
 {
-  "github_native": true,
-  "merge_strategy": "squash",
-  "phases": {
-    "1": {
-      "branch": "up/fase-01-schema-migracao-backfill",
-      "worktree": null,
-      "issue": 1,
-      "issue_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/issues/1",
-      "pr": 2,
-      "pr_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/pull/2",
-      "status": "merged"
-    },
-    "2": {
-      "branch": "up/fase-02-api-faixas-itens-resumo",
-      "worktree": null,
-      "issue": 3,
-      "issue_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/issues/3",
-      "pr": 4,
-      "pr_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/pull/4",
-      "status": "merged"
-    },
-    "3": {
-      "branch": "up/fase-03-frontend-grid-inline-config-estatistica",
-      "worktree": null,
-      "issue": 5,
-      "issue_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/issues/5",
-      "pr": 6,
-      "pr_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/pull/6",
-      "status": "merged"
-    }
+ "1": {
+  "branch": "up/fase-01-backend-api-publica",
+  "worktree": null,
+  "issue": 7,
+  "issue_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/issues/7",
+  "pr": 8,
+  "pr_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/pull/8",
+  "status": "merged"
+ },
+ "2": {
+  "branch": "up/fase-02-frontend-portal",
+  "worktree": null,
+  "issue": 9,
+  "issue_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/issues/9",
+  "pr": 11,
+  "pr_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/pull/11",
+  "status": "merged"
+ },
+ "github_native": true,
+ "merge_strategy": "squash",
+ "phases": {
+  "1": {
+   "branch": "up/fase-01-schema-migracao-backfill",
+   "worktree": null,
+   "issue": 1,
+   "issue_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/issues/1",
+   "pr": 2,
+   "pr_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/pull/2",
+   "status": "merged"
+  },
+  "2": {
+   "branch": "up/fase-02-api-faixas-itens-resumo",
+   "worktree": null,
+   "issue": 3,
+   "issue_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/issues/3",
+   "pr": 4,
+   "pr_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/pull/4",
+   "status": "merged"
+  },
+  "3": {
+   "branch": "up/fase-03-frontend-grid-inline-config-estatistica",
+   "worktree": null,
+   "issue": 5,
+   "issue_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/issues/5",
+   "pr": 6,
+   "pr_url": "https://github.com/Ecoupdigital/Whatsapp-Velhos/pull/6",
+   "status": "merged"
   }
+ }
 }
