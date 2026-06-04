@@ -1,107 +1,110 @@
-# BRIEFING — Eventos Galeto: faixas múltiplas + relação Cru/Assado
+# BRIEFING: Portal de Transparência — Velhos Parceiros F.C.
 
-## Contexto
+> Feature brownfield. Adiciona uma camada pública (sem login) ao app existente
+> (FastAPI + SQLite/Postgres backend, Next.js 14 App Router frontend).
+> Brainstorm aprovado em 2026-06-04. Próximo passo: `/up:plan`.
 
-Tela de evento (`/eventos/[id]`) usa o **sistema A**: `EventoParticipante` com campos
-de cartão inline (`numero_inicio`/`numero_fim` ÚNICOS, `qtd_cartoes_recebidos`,
-`qtd_vendidos`, `qtd_devolvidos`, `qtd_pagou_custo`). Existe um sistema B legado
-(`CartaoBaile`, tela `/cartoes` "Cartões de Baile") que já suporta N faixas mas está
-desconectado do fluxo de evento — **não será tocado** aqui (candidato a deprecar depois).
+## Valor Central
+Página pública única de prestação de contas. Diretoria e jogadores abrem um link
+e veem, em tempo real: dinheiro em caixa, fluxo do time, resultado dos eventos
+(Galeto, Baile) e as estatísticas esportivas. Construir confiança via transparência,
+sem expor dado sensível (quem deve).
 
-Banco: SQLAlchemy, prod Postgres / sqlite legacy. Tabelas criadas via
-`Base.metadata.create_all` (`backend/main.py:19`) → cria TABELAS novas sozinho (seguro),
-mas NÃO adiciona COLUNAS em tabelas existentes.
+## Decisões aprovadas (do brainstorm)
 
-## Objetivo
+| Tema | Decisão |
+|------|---------|
+| **Acesso** | Link totalmente aberto, sem login nem PIN. `noindex` no robots pra não indexar no Google. |
+| **Caixa** | Macro (saldo atual, total entrou, total saiu) + gráfico de fluxo 12 meses + contagem de atrasos (quantas mensalidades e quantos jogadores em atraso, SEM nomes). |
+| **Eventos** | Resultado líquido por evento: arrecadou X, custou Y, sobrou Z. |
+| **Jogos** | Completo: aproveitamento (V/E/D), gols pró/contra, rankings (artilharia, assistências, destaques), últimos resultados E próximos jogos (agenda). |
+| **Atualização** | Tempo real (lê o banco direto), com carimbo "atualizado em DD/MM HH:MM". Sem snapshot manual. |
+| **URL** | `app.velhosparceiros.com.br/transparencia` (mesma app, rota fora do guard). |
 
-1. **Faixas múltiplas e não-sequenciais por jogador.** Jogador recebe 12 sequenciais,
-   depois recebe mais cartões com números quebrados (não contíguos). Cada faixa pode ser
-   **numerada** (ex: 45-50) OU **sem número** (só quantidade, quando não se sabe os números).
-2. **Relação Cru × Assado.** Registrar, por participante, quantos dos cartões VENDIDOS
-   foram cru e quantos assado (split de venda), E o pedido pessoal do jogador por tipo.
-   Consolidar numa estatística do evento pra repassar ao fornecedor/cozinha.
+## TRAVA DE PRIVACIDADE (requisito duro)
+O portal NUNCA expõe:
+- Nome de jogador ligado a status de pagamento (quem pagou, quem deve).
+- Lista de transações individuais.
+- Telefone, dado pessoal, qualquer PII.
 
-## Restrições (do usuário)
+Atraso é sempre `COUNT` agregado. Nome de jogador só aparece em ranking esportivo
+(artilheiro/assistência/destaque), jamais em contexto financeiro. Essa trava vive
+no endpoint público: ele só monta números agregados, nunca serializa o registro cru.
 
-- **NÃO quebrar dados existentes.** Migração só aditiva + backfill. Rollback possível.
-- **Edição estilo planilha:** grid inline na tela do evento. Clica na célula, edita,
-  recalcula e salva sozinho. Sem modal pesado.
-- Solução durável > atalho (CLAUDE.md).
+## Arquitetura (2 camadas novas, zero coleta nova)
 
-## Design aprovado
+### Backend — router público novo
+- Arquivo: `backend/routers/portal.py`. Prefixo `/api/portal`. SEM `Depends(get_current_user)`.
+- Registrar em `backend/main.py` via `app.include_router(portal.router)`.
+- Read-only. Um endpoint agregador entrega o pacote inteiro numa request:
 
-### Dados
-
-**Nova tabela `evento_cartao_faixa`** (faixas de cartão por participante):
+`GET /api/portal` →
 ```
-id
-evento_participante_id  FK
-numero_inicio   int  null    -- null = lote sem número
-numero_fim      int  null
-quantidade      int  not null -- numerada: fim-ini+1 ; sem número: qtd digitada
-sem_numero      bool default false
-created_at
+{
+  meta:    { time_nome, atualizado_em }
+  caixa:   { saldo_atual, total_entrou, total_saiu, entrou_mes, saiu_mes,
+             fluxo_12m: [{ mes, entradas, saidas }],
+             atrasos: { mensalidades: N, jogadores: N } }
+  eventos: [{ titulo, tipo, data, arrecadado, custo, custo_origem, liquido, status }]
+  jogos:   { resumo: { vitorias, empates, derrotas, gols_pro, gols_contra },
+             artilharia: [...], assistencias: [...], destaques: [...],
+             ultimos_resultados: [{ data, adversario, placar }],
+             proximos_jogos:     [{ data, horario, local, adversario }] }
+}
 ```
-- `qtd_cartoes_recebidos` do participante = SOMA das quantidades das faixas.
-- Lote sem número: guarda só quantidade, exibe "Sem número (N cartões)".
-  **Decisão:** NÃO gerar número fake (evita colisão com reais).
+- Reusa lógica existente: `_calcular_saldo_atual` (contas.py), `/financeiro/balanco`,
+  `/financeiro/fluxo`, `/jogos/estatisticas`, `/jogos/rankings`, `eventos/{id}/resumo`.
+- `saldo_atual` = soma do saldo de todas as contas ativas.
+- `total_entrou`/`total_saiu` = soma de `transacoes` por tipo (cálculo direto novo, trivial).
+- `atrasos.mensalidades` = COUNT de mensalidades com status atrasado no mês corrente.
+  `atrasos.jogadores` = COUNT distinto de jogadores com mensalidade atrasada.
 
-**Nova tabela `evento_participante_item`** (split por tipo):
+### Backend — regra do líquido de evento
+- `liquido = arrecadado - custo`.
+- `custo` = `custo_real` se > 0, senão `custo_estimado`. `custo_origem` marca qual usou
+  ("real" | "estimado" | "sem_custo") pro front rotular ("custo previsto" / "a confirmar").
+- Considerar só eventos relevantes (concluídos e em andamento). Planejados sem
+  arrecadação podem aparecer como "em breve".
+
+### Frontend — route group público novo
 ```
-id
-evento_participante_id  FK
-tipo            text  -- "cru" | "assado" | ...
-qtd_vendido     int default 0
-qtd_pedido      int default 0
+frontend/src/app/(public)/
+  layout.tsx              → header limpo (escudo + nome), sem sidebar, sem guard de auth
+  transparencia/page.tsx  → a página (client component, fetch /api/portal)
 ```
+- Fora do route group `(app)`, então não herda o redirect pro login.
+- Metadata `robots: { index: false, follow: false }` na página.
+- Reusa tema dark + vermelho #E31E24. `recharts` (já instalado) pro gráfico de fluxo.
+  `framer-motion` entrada suave. `lucide-react` ícones. Mobile-first.
 
-**Coluna nova `Evento.tipos_item`** (text/JSON, ex: `["cru","assado"]`). Configurável por
-evento; galeto preenche cru/assado. **Precisa migração explícita** (create_all não adiciona).
+### Layout da página (uma rolagem, 4 blocos)
+1. **Hero:** escudo + "Velhos Parceiros F.C." + "Prestação de Contas" + saldo atual
+   em número herói + "atualizado em DD/MM HH:MM".
+2. **Caixa:** total entrou / total saiu (dois cards) + gráfico fluxo 12 meses
+   (entradas vs saídas) + 2 badges de alerta (N mensalidades em atraso, N jogadores em atraso).
+3. **Eventos:** card por evento com arrecadou / custou / sobrou (líquido em verde/vermelho).
+4. **Em campo:** cards V/E/D + gols pró/contra, rankings (artilharia/assistências/destaques),
+   últimos resultados (placares), próximos jogos (agenda).
+5. Footer discreto.
 
-### Migração (aditiva, idempotente)
+## Deploy
+- CORS: NÃO muda. Front chama `/api` via rewrite same-origin (Next server), navegador
+  nunca fala direto com o backend.
+- Mesma pipeline Coolify, sem container novo. Backend `velhos-backend.ecoup.digital`,
+  front `app.velhosparceiros.com.br`.
 
-1. `create_all` cria as 2 tabelas novas automaticamente.
-2. Script de migração idempotente:
-   - ALTER TABLE eventos ADD COLUMN tipos_item (se não existir).
-   - Backfill: cada `EventoParticipante` com `numero_inicio`/`numero_fim` preenchidos →
-     cria 1 linha em `evento_cartao_faixa` (numerada). Quem não tem números mas tem
-     `qtd_cartoes_recebidos > 0` → 1 faixa sem_numero com essa quantidade.
-   - NÃO dropar `numero_inicio`/`numero_fim` do participante (mantém pra rollback).
-3. Idempotência: checar existência antes de inserir/alterar (rodável 2x sem duplicar).
+## Fora de escopo (YAGNI)
+PIN/senha, snapshot/publicação manual, painel de config do portal, export PDF,
+paginação de histórico de eventos, multi-idioma, light mode.
 
-### Validações
+## Critérios de sucesso
+- `GET /api/portal` responde sem token, com o pacote agregado completo.
+- Nenhum nome de jogador aparece ligado a pagamento (verificável no payload).
+- `/transparencia` abre sem login, renderiza os 4 blocos, responsiva no mobile.
+- Gráfico de fluxo 12 meses renderiza com dado real.
+- Líquido de evento (Galeto) bate com arrecadado - custo.
+- Página com `noindex`.
 
-- Soma das faixas (quantidade) = `qtd_cartoes_recebidos`.
-- Soma `qtd_vendido` por tipo = `qtd_vendidos` do participante (a relação tem que fechar).
-- `qtd_pedido` por tipo = livre.
-- Reconciliação existente mantida: vendidos+devolvidos+pagou_custo <= recebidos.
-
-### API
-
-- CRUD faixas: `POST/PUT/DELETE /eventos/{id}/participantes/{pid}/faixas`.
-- `popular` e `atualizar_cartoes`: passam a derivar `qtd_cartoes_recebidos` da soma das faixas.
-- PUT itens por tipo: `/eventos/{id}/participantes/{pid}/itens` (lista `{tipo, qtd_vendido, qtd_pedido}`).
-- `resumo` do evento: agrega por tipo → total cru vendido / assado vendido / cru pedido /
-  assado pedido (a relação consolidada).
-- Salvar `tipos_item`: via PUT evento existente.
-
-### Frontend
-
-- **Grid inline (planilha)** na tela do evento: 1 linha por participante. Colunas editáveis
-  in-place com autosave + recálculo: recebidos (via faixas), vendidos, devolvidos, pagou_custo,
-  cru vendido, assado vendido, cru pedido, assado pedido, valor (derivado).
-- Faixas (1:N) editadas em sub-linha expansível: add faixa numerada / add lote sem número,
-  editar/remover cada.
-- Config do evento: campo tipos de item.
-- Estatística do evento: relação consolidada cru × assado (vendido + pedido) + total a repassar.
-
-### Fora de escopo
-
-- Sistema B (`CartaoBaile` / tela `/cartoes`). Fica como está.
-
-## Critério de sucesso
-
-- Dados atuais intactos após migração (mesma contagem de recebidos por participante).
-- Dá pra adicionar faixa numerada quebrada E lote sem número a um jogador.
-- Split cru/assado fecha com vendidos; estatística do evento mostra a relação total.
-- Edição inline na grid recalcula e persiste sem modal.
+## Modo de execução
+`/up:build --solo` (autônomo total, mantém GitHub: worktree → issue → PR → merge por fase,
+sem menu nem gate visual).
