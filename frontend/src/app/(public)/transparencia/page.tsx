@@ -4,9 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchPortal } from "@/lib/portal";
 import type { PortalResponse } from "@/types/portal";
 import { SkeletonCard } from "@/components/ui";
-import { HeroCaixa, CaixaBloco } from "@/components/portal";
-// Blocos restantes (preenchidos nos planos 005-006):
-// import { EventosBloco } from "@/components/portal/EventosBloco";
+import { HeroCaixa, CaixaBloco, EventosBloco } from "@/components/portal";
+// Blocos restantes (preenchidos nos planos 006+):
 // import { JogosBloco } from "@/components/portal/JogosBloco";
 
 export default function TransparenciaPage() {
@@ -67,8 +66,7 @@ export default function TransparenciaPage() {
     <div className="space-y-8" data-state="ready">
       <HeroCaixa meta={data.meta} caixa={data.caixa} />
       <CaixaBloco caixa={data.caixa} />
-      {/* PLANO 005: <EventosBloco eventos={data.eventos} /> */}
-      <section data-block="eventos" className="text-txt-secondary">[eventos]</section>
+      <EventosBloco eventos={data.eventos} />
       {/* PLANO 006: <JogosBloco jogos={data.jogos} /> */}
       <section data-block="jogos" className="text-txt-secondary">[jogos]</section>
 
