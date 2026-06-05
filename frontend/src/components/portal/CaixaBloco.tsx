@@ -69,62 +69,30 @@ export function CaixaBloco({ caixa }: CaixaBlocoProps) {
         )}
       </div>
 
-      {/* Mensalidades (geral) — todas as competencias, sem nomes */}
-      <div className="rounded-lg border border-border-subtle bg-surface-tertiary p-4 space-y-3">
+      {/* Mensalidades (geral) — foto de jogadores, todas as competencias, sem nomes */}
+      <div className="rounded-lg border border-border-subtle bg-surface-tertiary p-4">
         <h3 className="flex items-center gap-2 font-body text-[11px] uppercase tracking-wide text-txt-secondary">
-          <Users className="h-3.5 w-3.5" /> Mensalidades (geral)
+          <Users className="h-3.5 w-3.5" /> Mensalidades
         </h3>
 
-        {/* Destaque: jogadores em dia x em atraso */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-2 gap-3 text-center">
           <div>
-            <p className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">
-              Em dia
-            </p>
-            <p className="mt-0.5 font-display text-lg font-semibold tabular-nums text-emerald-400">
+            <p className="font-display text-2xl font-bold tabular-nums text-emerald-400">
               {caixa.mensalidades.jogadores_em_dia}
             </p>
+            <p className="mt-0.5 font-body text-xs text-txt-secondary">em dia</p>
           </div>
           <div>
-            <p className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">
-              Em atraso
-            </p>
-            <p className="mt-0.5 font-display text-lg font-semibold tabular-nums text-brand-red">
+            <p className="font-display text-2xl font-bold tabular-nums text-brand-red">
               {caixa.mensalidades.jogadores_em_atraso}
             </p>
+            <p className="mt-0.5 font-body text-xs text-txt-secondary">em atraso</p>
           </div>
         </div>
-        <p className="font-body text-xs text-txt-secondary">
-          {caixa.mensalidades.jogadores_em_dia} de {caixa.mensalidades.jogadores_total} jogadores em dia
-        </p>
 
-        {/* Contagem de mensalidades por status */}
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 border-t border-border-subtle">
-          <div className="flex items-center justify-between">
-            <span className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">Pagas</span>
-            <span className="font-display text-sm font-semibold tabular-nums text-txt-primary">
-              {caixa.mensalidades.pagas}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">Em atraso</span>
-            <span className="font-display text-sm font-semibold tabular-nums text-brand-red">
-              {caixa.mensalidades.em_atraso}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">A vencer</span>
-            <span className="font-display text-sm font-semibold tabular-nums text-txt-primary">
-              {caixa.mensalidades.a_vencer}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">Isentas</span>
-            <span className="font-display text-sm font-semibold tabular-nums text-txt-primary">
-              {caixa.mensalidades.isentas}
-            </span>
-          </div>
-        </div>
+        <p className="mt-2 text-center font-body text-xs text-txt-tertiary">
+          de {caixa.mensalidades.jogadores_total} jogadores
+        </p>
       </div>
     </motion.section>
   );
