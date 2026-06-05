@@ -13,7 +13,7 @@ from routers.jogos import _parse_entries
 from schemas import (
     PortalResponse, PortalMeta, PortalCaixa, PortalCaixaAtrasos, PortalFluxoMes,
     PortalEvento, PortalEventoGaleto, PortalJogos, PortalJogoResumo, PortalRankingEntry,
-    PortalResultado, PortalProximoJogo,
+    PortalResultado, PortalProximoJogo, PortalMensalidadesGeral,
 )
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
@@ -44,6 +44,75 @@ def _mes_vencido(db: Session, mes: str, hoje: date) -> bool:
     except (ValueError, IndexError):
         return False
     return hoje > data_venc
+
+
+def _montar_mensalidades_geral(db: Session) -> PortalMensalidadesGeral:
+    """Agrega contagens GERAIS de mensalidades (todas as competencias).
+
+    Regra de "em_atraso": mensalidade nao paga/isenta cujo mes ja venceu.
+    - mes < mes_atual: vencido sempre.
+    - mes == mes_atual: vencido se _mes_vencido(db, mes, hoje).
+    - mes > mes_atual: nunca vencido (a_vencer).
+
+    Usa cache de _mes_vencido por mes para evitar query repetida ao banco.
+    NAO escreve no banco (endpoint publico read-only).
+    """
+    now = datetime.now()
+    mes_atual = now.strftime("%Y-%m")
+    hoje = now.date()
+
+    rows = db.query(
+        Mensalidade.jogador_id,
+        Mensalidade.mes_referencia,
+        Mensalidade.status,
+    ).all()
+
+    pagas = 0
+    em_atraso = 0
+    a_vencer = 0
+    isentas = 0
+    jog_todos: set = set()
+    jog_atraso: set = set()
+    vencido_por_mes: dict[str, bool] = {}
+
+    for jogador_id, mes_ref, status in rows:
+        if jogador_id is not None:
+            jog_todos.add(jogador_id)
+
+        if status == "pago":
+            pagas += 1
+        elif status == "isento":
+            isentas += 1
+        else:  # pendente | atrasado
+            if mes_ref < mes_atual:
+                vencido = True
+            elif mes_ref == mes_atual:
+                if mes_ref not in vencido_por_mes:
+                    vencido_por_mes[mes_ref] = _mes_vencido(db, mes_ref, hoje)
+                vencido = vencido_por_mes[mes_ref]
+            else:
+                vencido = False
+
+            if status == "atrasado" or (status == "pendente" and vencido):
+                em_atraso += 1
+                if jogador_id is not None:
+                    jog_atraso.add(jogador_id)
+            else:
+                a_vencer += 1
+
+    jogadores_total = len(jog_todos)
+    jogadores_em_atraso = len(jog_atraso)
+    jogadores_em_dia = len(jog_todos - jog_atraso)
+
+    return PortalMensalidadesGeral(
+        pagas=pagas,
+        em_atraso=em_atraso,
+        a_vencer=a_vencer,
+        isentas=isentas,
+        jogadores_total=jogadores_total,
+        jogadores_em_dia=jogadores_em_dia,
+        jogadores_em_atraso=jogadores_em_atraso,
+    )
 
 
 def _montar_caixa(db: Session) -> PortalCaixa:
@@ -118,6 +187,7 @@ def _montar_caixa(db: Session) -> PortalCaixa:
             mensalidades=int(n_mensalidades or 0),
             jogadores=int(n_jogadores or 0),
         ),
+        mensalidades=_montar_mensalidades_geral(db),
     )
 
 

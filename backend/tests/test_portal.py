@@ -495,3 +495,140 @@ def test_galeto_none_sem_cartoes(client, TestingSession):
     ev_r = next((e for e in eventos if e["titulo"] == "Churrasco Sem Cartao"), None)
     assert ev_r is not None
     assert ev_r["galeto"] is None, "galeto deve ser None quando nao ha cartoes emitidos"
+
+
+# --- mensalidades_geral: estatisticas gerais (todas as competencias) ---
+
+def test_mensalidades_geral_shape(client, seed_portal_data):
+    """Campo caixa.mensalidades existe com todas as chaves esperadas."""
+    geral = client.get("/api/portal").json()["caixa"].get("mensalidades")
+    assert geral is not None, "caixa.mensalidades deve estar presente"
+    assert set(geral.keys()) == {
+        "pagas", "em_atraso", "a_vencer", "isentas",
+        "jogadores_total", "jogadores_em_dia", "jogadores_em_atraso",
+    }
+    for k, v in geral.items():
+        assert isinstance(v, int) and not isinstance(v, bool), (
+            f"campo {k} deve ser int, nao {type(v)}"
+        )
+
+
+def test_mensalidades_geral_mes_passado_pendente_eh_atraso(client, TestingSession):
+    """Mensalidade de mes passado com status pendente conta como em_atraso."""
+    db = TestingSession()
+    try:
+        db.add(Configuracao(chave="time_nome", valor="Velhos Parceiros F.C."))
+        j = Jogador(nome="TesteMesPast", tipo="jogador", ativo=1)
+        db.add(j)
+        db.flush()
+        # mes passado: sempre vencido independente do dia de vencimento
+        db.add(Mensalidade(jogador_id=j.id, mes_referencia="2020-01", valor=50.0, status="pendente"))
+        db.commit()
+    finally:
+        db.close()
+
+    geral = client.get("/api/portal").json()["caixa"]["mensalidades"]
+    assert geral["em_atraso"] == 1
+    assert geral["a_vencer"] == 0
+    assert geral["jogadores_em_atraso"] == 1
+
+
+def test_mensalidades_geral_mes_atual_pendente_nao_vencido_eh_a_vencer(client, TestingSession):
+    """Mensalidade do mes atual pendente, sem ter vencido, conta como a_vencer."""
+    db = TestingSession()
+    try:
+        db.add(Configuracao(chave="time_nome", valor="Velhos Parceiros F.C."))
+        # dia de vencimento = 28: na maioria dos dias de execucao nao venceu ainda.
+        # Se hoje for > 28, o mes venceu e o teste adapta.
+        db.add(Configuracao(chave="dia_vencimento", valor="28"))
+        j = Jogador(nome="TesteMesAtual", tipo="jogador", ativo=1)
+        db.add(j)
+        db.flush()
+        mes = _mes_corrente()
+        db.add(Mensalidade(jogador_id=j.id, mes_referencia=mes, valor=50.0, status="pendente"))
+        db.commit()
+    finally:
+        db.close()
+
+    hoje = datetime.now().day
+    geral = client.get("/api/portal").json()["caixa"]["mensalidades"]
+    if hoje <= 28:
+        assert geral["a_vencer"] == 1
+        assert geral["em_atraso"] == 0
+        assert geral["jogadores_em_dia"] == 1
+        assert geral["jogadores_em_atraso"] == 0
+    else:
+        # 29/30/31 com dia_vencimento=28: mes venceu, pendente = em_atraso
+        assert geral["em_atraso"] == 1
+        assert geral["a_vencer"] == 0
+
+
+def test_mensalidades_geral_pago_e_isento(client, TestingSession):
+    """Status pago e isento contam em seus respectivos buckets, nunca em atraso."""
+    db = TestingSession()
+    try:
+        db.add(Configuracao(chave="time_nome", valor="Velhos Parceiros F.C."))
+        j1 = Jogador(nome="Pagador", tipo="jogador", ativo=1)
+        j2 = Jogador(nome="Isento", tipo="jogador", ativo=1)
+        db.add_all([j1, j2])
+        db.flush()
+        db.add(Mensalidade(jogador_id=j1.id, mes_referencia="2025-01", valor=50.0, status="pago"))
+        db.add(Mensalidade(jogador_id=j2.id, mes_referencia="2025-01", valor=50.0, status="isento"))
+        db.commit()
+    finally:
+        db.close()
+
+    geral = client.get("/api/portal").json()["caixa"]["mensalidades"]
+    assert geral["pagas"] == 1
+    assert geral["isentas"] == 1
+    assert geral["em_atraso"] == 0
+    assert geral["a_vencer"] == 0
+
+
+def test_mensalidades_geral_particao_em_dia_mais_em_atraso_igual_total(client, TestingSession):
+    """Particao limpa: jogadores_em_dia + jogadores_em_atraso == jogadores_total."""
+    db = TestingSession()
+    try:
+        db.add(Configuracao(chave="time_nome", valor="Velhos Parceiros F.C."))
+        db.add(Configuracao(chave="dia_vencimento", valor="1"))
+        j1 = Jogador(nome="Adimplente", tipo="jogador", ativo=1)
+        j2 = Jogador(nome="Inadimplente", tipo="jogador", ativo=1)
+        j3 = Jogador(nome="Isento", tipo="jogador", ativo=1)
+        db.add_all([j1, j2, j3])
+        db.flush()
+        # j1: pago no mes passado -> em_dia
+        db.add(Mensalidade(jogador_id=j1.id, mes_referencia="2020-01", valor=50.0, status="pago"))
+        # j2: pendente no mes passado -> em_atraso (mes < mes_atual sempre vencido)
+        db.add(Mensalidade(jogador_id=j2.id, mes_referencia="2020-01", valor=50.0, status="pendente"))
+        # j3: isento no mes passado -> em_dia (isento nao e atraso)
+        db.add(Mensalidade(jogador_id=j3.id, mes_referencia="2020-01", valor=0.0, status="isento"))
+        db.commit()
+    finally:
+        db.close()
+
+    geral = client.get("/api/portal").json()["caixa"]["mensalidades"]
+    assert geral["jogadores_em_dia"] + geral["jogadores_em_atraso"] == geral["jogadores_total"]
+    assert geral["jogadores_em_atraso"] == 1   # apenas j2
+    assert geral["jogadores_em_dia"] == 2      # j1 e j3
+    assert geral["jogadores_total"] == 3
+
+
+def test_mensalidades_geral_jogador_com_1_atraso_so_em_atraso(client, TestingSession):
+    """Jogador com ao menos 1 mensalidade em atraso cai apenas em jogadores_em_atraso."""
+    db = TestingSession()
+    try:
+        db.add(Configuracao(chave="time_nome", valor="Velhos Parceiros F.C."))
+        j = Jogador(nome="MistoJog", tipo="jogador", ativo=1)
+        db.add(j)
+        db.flush()
+        # 1 mensalidade paga e 1 em atraso para o mesmo jogador
+        db.add(Mensalidade(jogador_id=j.id, mes_referencia="2020-01", valor=50.0, status="pago"))
+        db.add(Mensalidade(jogador_id=j.id, mes_referencia="2020-02", valor=50.0, status="atrasado"))
+        db.commit()
+    finally:
+        db.close()
+
+    geral = client.get("/api/portal").json()["caixa"]["mensalidades"]
+    assert geral["jogadores_em_atraso"] == 1
+    assert geral["jogadores_em_dia"] == 0  # tem pelo menos 1 atraso -> nao esta em_dia
+    assert geral["jogadores_total"] == 1

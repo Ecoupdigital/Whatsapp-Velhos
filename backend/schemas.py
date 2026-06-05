@@ -731,6 +731,16 @@ class PortalCaixaAtrasos(BaseModel):
     jogadores: int      # COUNT DISTINCT jogador_id dessas mensalidades
 
 
+class PortalMensalidadesGeral(BaseModel):
+    pagas: int
+    em_atraso: int
+    a_vencer: int
+    isentas: int
+    jogadores_total: int
+    jogadores_em_dia: int
+    jogadores_em_atraso: int
+
+
 class PortalFluxoMes(BaseModel):
     mes: str            # "YYYY-MM"
     entradas: float
@@ -745,6 +755,7 @@ class PortalCaixa(BaseModel):
     saiu_mes: float
     fluxo_12m: list[PortalFluxoMes]
     atrasos: PortalCaixaAtrasos
+    mensalidades: PortalMensalidadesGeral
 
 
 class PortalRankingEntry(BaseModel):
