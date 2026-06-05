@@ -7,12 +7,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models import Conta, Transacao, Mensalidade, Evento, EventoParticipante, Jogo, Configuracao
+from models import Conta, Transacao, Mensalidade, Evento, EventoParticipante, EventoParticipanteItem, Jogo, Configuracao
 from routers.contas import _calcular_saldo_atual
 from routers.jogos import _parse_entries
 from schemas import (
     PortalResponse, PortalMeta, PortalCaixa, PortalCaixaAtrasos, PortalFluxoMes,
-    PortalEvento, PortalJogos, PortalJogoResumo, PortalRankingEntry,
+    PortalEvento, PortalEventoGaleto, PortalJogos, PortalJogoResumo, PortalRankingEntry,
     PortalResultado, PortalProximoJogo,
 )
 
@@ -121,6 +121,74 @@ def _montar_caixa(db: Session) -> PortalCaixa:
     )
 
 
+def _tipos_do_evento_local(evento: Evento) -> list[str]:
+    """Desserializa tipos_item do evento (Text JSON). Retorna lista vazia se ausente/invalido.
+
+    Espelha a mesma logica de routers.eventos._tipos_do_evento; copiado localmente
+    para evitar import cruzado router->router.
+    """
+    import json as _json
+    raw = getattr(evento, "tipos_item", None)
+    if not raw:
+        return []
+    try:
+        val = _json.loads(raw) if isinstance(raw, str) else raw
+        return val if isinstance(val, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
+def _montar_galeto(db: Session, evento: Evento) -> "PortalEventoGaleto | None":
+    """Agrega estatisticas de galeto/cartao do evento para o portal publico.
+
+    Reusa a mesma semantica de eventos.py::resumo_evento (binario complementar:
+    tipo[0] cru e armazenado; tipo[1] assado = vendidos - cru).
+    Retorna None se o evento nao tem cartoes emitidos (galeto=None -> UI nao muda).
+    Sem nomes, so agregados (privacidade).
+    """
+    parts = db.query(EventoParticipante).filter(
+        EventoParticipante.evento_id == evento.id
+    ).all()
+
+    emitidos = sum(p.qtd_cartoes_recebidos or 0 for p in parts)
+    if emitidos <= 0:
+        return None
+
+    vendidos = sum(p.qtd_vendidos or 0 for p in parts)
+    devolvidos = sum(p.qtd_devolvidos or 0 for p in parts)
+
+    tipos = _tipos_do_evento_local(evento)
+    por_tipo: list[PortalRankingEntry] = []
+    if tipos and vendidos > 0:
+        # Buscar qtd_vendido por tipo via query group-by (mesma logica de resumo_evento)
+        vendido_por_tipo = dict(
+            db.query(
+                EventoParticipanteItem.tipo,
+                func.coalesce(func.sum(EventoParticipanteItem.qtd_vendido), 0),
+            )
+            .join(EventoParticipante, EventoParticipante.id == EventoParticipanteItem.evento_participante_id)
+            .filter(EventoParticipante.evento_id == evento.id)
+            .group_by(EventoParticipanteItem.tipo)
+            .all()
+        )
+        primary = tipos[0]
+        cru_total = int(vendido_por_tipo.get(primary, 0) or 0)
+        por_tipo.append(PortalRankingEntry(nome=primary, quantidade=cru_total))
+        if len(tipos) >= 2:
+            complemento = tipos[1]
+            por_tipo.append(PortalRankingEntry(
+                nome=complemento,
+                quantidade=max(0, vendidos - cru_total),
+            ))
+
+    return PortalEventoGaleto(
+        emitidos=emitidos,
+        vendidos=vendidos,
+        devolvidos=devolvidos,
+        por_tipo=por_tipo,
+    )
+
+
 def _montar_eventos(db: Session) -> list[PortalEvento]:
     candidatos = db.query(Evento).filter(
         Evento.status.in_(["concluido", "em_andamento", "planejado"])
@@ -154,6 +222,7 @@ def _montar_eventos(db: Session) -> list[PortalEvento]:
             custo_origem=custo_origem,
             liquido=arrecadado - custo,
             status=e.status,
+            galeto=_montar_galeto(db, e),
         ))
 
     # ordenar por data desc; None vai pro fim

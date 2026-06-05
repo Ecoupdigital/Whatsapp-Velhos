@@ -747,6 +747,18 @@ class PortalCaixa(BaseModel):
     atrasos: PortalCaixaAtrasos
 
 
+class PortalRankingEntry(BaseModel):
+    nome: str
+    quantidade: int
+
+
+class PortalEventoGaleto(BaseModel):
+    emitidos: int
+    vendidos: int
+    devolvidos: int
+    por_tipo: list[PortalRankingEntry] = []  # ex: [{nome:"cru",quantidade:210},{nome:"assado",quantidade:174}]
+
+
 class PortalEvento(BaseModel):
     titulo: str
     tipo: str
@@ -756,6 +768,7 @@ class PortalEvento(BaseModel):
     custo_origem: str              # "real" | "estimado" | "sem_custo"
     liquido: float
     status: str                    # concluido | em_andamento | planejado
+    galeto: Optional[PortalEventoGaleto] = None
 
 
 class PortalJogoResumo(BaseModel):
@@ -764,11 +777,6 @@ class PortalJogoResumo(BaseModel):
     derrotas: int
     gols_pro: int
     gols_contra: int
-
-
-class PortalRankingEntry(BaseModel):
-    nome: str
-    quantidade: int
 
 
 class PortalResultado(BaseModel):

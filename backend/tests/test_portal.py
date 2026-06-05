@@ -16,7 +16,7 @@ import pytest
 
 from models import (
     Conta, Transacao, Mensalidade, Jogador,
-    Evento, EventoParticipante, Jogo, Configuracao,
+    Evento, EventoParticipante, EventoParticipanteItem, Jogo, Configuracao,
 )
 
 
@@ -382,3 +382,116 @@ def test_gols_nulos_nao_quebram_resumo(client, TestingSession):
     assert jogos["resumo"]["gols_contra"] == 0
     placares = {x["adversario"]: x["placar"] for x in jogos["ultimos_resultados"]}
     assert placares["Sem Placar"] == "0x0"
+
+
+# --- Galeto: bloco de estatisticas de cartoes ---
+
+@pytest.fixture()
+def seed_galeto_com_tipos(TestingSession):
+    """Evento com cartoes e split cru/assado. Fixture isolada do seed_portal_data."""
+    db = TestingSession()
+    try:
+        db.add(Configuracao(chave="time_nome", valor="Velhos Parceiros F.C."))
+        j1 = Jogador(nome="Zeus", tipo="jogador", ativo=1)
+        j2 = Jogador(nome="Hera", tipo="jogador", ativo=1)
+        db.add_all([j1, j2])
+        db.flush()
+
+        # Evento com tipos_item definido (cru + assado)
+        ev = Evento(
+            tipo="galeto",
+            titulo="Galeto Teste",
+            data_inicio="2026-05-15",
+            status="concluido",
+            custo_real=100.0,
+            tipos_item='["cru","assado"]',
+        )
+        db.add(ev)
+        db.flush()
+
+        # p1: recebeu 10 cartoes, vendeu 6, devolveu 2; cru=4
+        p1 = EventoParticipante(
+            evento_id=ev.id, jogador_id=j1.id,
+            status="confirmado", valor=60.0, valor_pago=60.0,
+            qtd_cartoes_recebidos=10, qtd_vendidos=6, qtd_devolvidos=2,
+        )
+        # p2: recebeu 5 cartoes, vendeu 4, devolveu 1; cru=2
+        p2 = EventoParticipante(
+            evento_id=ev.id, jogador_id=j2.id,
+            status="confirmado", valor=40.0, valor_pago=40.0,
+            qtd_cartoes_recebidos=5, qtd_vendidos=4, qtd_devolvidos=1,
+        )
+        db.add_all([p1, p2])
+        db.flush()
+
+        # Itens por tipo: tipo "cru" = 4 (p1) + 2 (p2) = 6 total
+        db.add(EventoParticipanteItem(evento_participante_id=p1.id, tipo="cru", qtd_vendido=4))
+        db.add(EventoParticipanteItem(evento_participante_id=p2.id, tipo="cru", qtd_vendido=2))
+        db.commit()
+
+        return {
+            "evento_titulo": "Galeto Teste",
+            "emitidos": 15,    # 10 + 5
+            "vendidos": 10,    # 6 + 4
+            "devolvidos": 3,   # 2 + 1
+            "cru_total": 6,    # 4 + 2
+            "assado_total": 4, # vendidos(10) - cru(6)
+        }
+    finally:
+        db.close()
+
+
+def test_galeto_bloco_presente_com_cartoes(client, seed_galeto_com_tipos):
+    """Evento com cartoes emitidos retorna bloco galeto com contagens corretas."""
+    exp = seed_galeto_com_tipos
+    eventos = client.get("/api/portal").json()["eventos"]
+    ev = next((e for e in eventos if e["titulo"] == exp["evento_titulo"]), None)
+    assert ev is not None, "Evento nao encontrado na resposta"
+    galeto = ev.get("galeto")
+    assert galeto is not None, "Campo galeto deve estar presente para evento com cartoes"
+    assert galeto["emitidos"] == exp["emitidos"]
+    assert galeto["vendidos"] == exp["vendidos"]
+    assert galeto["devolvidos"] == exp["devolvidos"]
+
+
+def test_galeto_por_tipo_cru_assado(client, seed_galeto_com_tipos):
+    """Split por tipo (cru/assado) usa logica binaria complementar de resumo_evento."""
+    exp = seed_galeto_com_tipos
+    eventos = client.get("/api/portal").json()["eventos"]
+    ev = next(e for e in eventos if e["titulo"] == exp["evento_titulo"])
+    por_tipo = {t["nome"]: t["quantidade"] for t in ev["galeto"]["por_tipo"]}
+    assert por_tipo.get("cru") == exp["cru_total"]      # 6
+    assert por_tipo.get("assado") == exp["assado_total"]  # 4
+
+
+def test_galeto_none_sem_cartoes(client, TestingSession):
+    """Evento sem cartoes emitidos retorna galeto=None (UI nao renderiza bloco)."""
+    db = TestingSession()
+    try:
+        db.add(Configuracao(chave="time_nome", valor="Velhos Parceiros F.C."))
+        j = Jogador(nome="Fulano", tipo="jogador", ativo=1)
+        db.add(j)
+        db.flush()
+        ev = Evento(
+            tipo="churrasco",
+            titulo="Churrasco Sem Cartao",
+            data_inicio="2026-05-20",
+            status="concluido",
+            custo_real=50.0,
+        )
+        db.add(ev)
+        db.flush()
+        # Participante pagante mas sem qtd_cartoes_recebidos (emitidos=0)
+        db.add(EventoParticipante(
+            evento_id=ev.id, jogador_id=j.id,
+            status="confirmado", valor=80.0, valor_pago=80.0,
+            qtd_cartoes_recebidos=0, qtd_vendidos=0, qtd_devolvidos=0,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    eventos = client.get("/api/portal").json()["eventos"]
+    ev_r = next((e for e in eventos if e["titulo"] == "Churrasco Sem Cartao"), None)
+    assert ev_r is not None
+    assert ev_r["galeto"] is None, "galeto deve ser None quando nao ha cartoes emitidos"
