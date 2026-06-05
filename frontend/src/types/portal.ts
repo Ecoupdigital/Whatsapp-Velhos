@@ -17,6 +17,16 @@ export interface PortalCaixaAtrasos {
   jogadores: number;    // COUNT DISTINCT
 }
 
+export interface PortalMensalidadesGeral {
+  pagas: number;
+  em_atraso: number;
+  a_vencer: number;
+  isentas: number;
+  jogadores_total: number;
+  jogadores_em_dia: number;
+  jogadores_em_atraso: number;
+}
+
 export interface PortalCaixa {
   saldo_atual: number;
   total_entrou: number;
@@ -25,6 +35,7 @@ export interface PortalCaixa {
   saiu_mes: number;
   fluxo_12m: PortalFluxoMes[]; // ate 12 itens, ordem cronologica asc
   atrasos: PortalCaixaAtrasos;
+  mensalidades: PortalMensalidadesGeral;
 }
 
 export type PortalCustoOrigem = "real" | "estimado" | "sem_custo";
