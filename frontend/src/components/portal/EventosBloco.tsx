@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { PartyPopper, CalendarRange } from "lucide-react";
+import { PartyPopper, CalendarRange, Drumstick } from "lucide-react";
 import { Card } from "@/components/ui";
 import { EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -108,6 +108,55 @@ export function EventosBloco({ eventos }: EventosBlocoProps) {
                   </p>
                 </div>
               </div>
+
+              {ev.galeto && (
+                <div className="mt-3 border-t border-border-subtle pt-3">
+                  <p className="mb-1.5 flex items-center gap-1.5 font-body text-[11px] uppercase tracking-wide text-txt-secondary">
+                    <Drumstick className="h-3.5 w-3.5 text-brand-red" /> Galetos
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">
+                        Emitidos
+                      </p>
+                      <p className="font-display text-sm font-semibold tabular-nums text-txt-primary">
+                        {ev.galeto.emitidos}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">
+                        Vendidos
+                      </p>
+                      <p className="font-display text-sm font-semibold tabular-nums text-txt-primary">
+                        {ev.galeto.vendidos}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-body text-[11px] uppercase tracking-wide text-txt-secondary">
+                        Devolvidos
+                      </p>
+                      <p className="font-display text-sm font-semibold tabular-nums text-txt-secondary">
+                        {ev.galeto.devolvidos}
+                      </p>
+                    </div>
+                  </div>
+                  {ev.galeto.por_tipo.length > 0 && (
+                    <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                      {ev.galeto.por_tipo.map((t) => (
+                        <span
+                          key={t.nome}
+                          className="rounded-full bg-surface-tertiary px-2 py-0.5 font-body text-[11px] capitalize text-txt-secondary"
+                        >
+                          {t.nome}{" "}
+                          <span className="font-semibold tabular-nums text-txt-primary">
+                            {t.quantidade}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </Card>
           ))}
         </div>

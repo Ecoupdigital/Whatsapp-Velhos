@@ -29,6 +29,18 @@ export interface PortalCaixa {
 
 export type PortalCustoOrigem = "real" | "estimado" | "sem_custo";
 
+export interface PortalRankingEntry {
+  nome: string;
+  quantidade: number;
+}
+
+export interface PortalEventoGaleto {
+  emitidos: number;
+  vendidos: number;
+  devolvidos: number;
+  por_tipo: PortalRankingEntry[]; // [{nome:"cru",quantidade:210}, ...]
+}
+
 export interface PortalEvento {
   titulo: string;
   tipo: string;
@@ -38,6 +50,7 @@ export interface PortalEvento {
   custo_origem: PortalCustoOrigem;
   liquido: number;
   status: string;             // concluido | em_andamento | planejado
+  galeto?: PortalEventoGaleto | null;
 }
 
 export interface PortalJogosResumo {
@@ -46,11 +59,6 @@ export interface PortalJogosResumo {
   derrotas: number;
   gols_pro: number;
   gols_contra: number;
-}
-
-export interface PortalRankingEntry {
-  nome: string;
-  quantidade: number;
 }
 
 export interface PortalResultado {
