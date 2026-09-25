@@ -244,14 +244,11 @@ export default function BailePlanilhaPage() {
                       e.preventDefault();
                       const form = e.currentTarget;
                       const bruto = String(new FormData(form).get("n") || "").trim();
-                      const pedacos = bruto.split(/[^\d]+/).filter(Boolean).map(Number);
-                      if (!pedacos.length) return;
-                      const inicio = pedacos[0];
-                      const fim = pedacos.length > 1 ? pedacos[1] : pedacos[0];
+                      const numeros = bruto.split(/[^\d]+/).filter(Boolean).map(Number);
+                      if (!numeros.length) return;
                       try {
-                        await api.post(`/eventos/${eventoId}/participantes/${p.id}/faixas`, {
-                          numero_inicio: inicio,
-                          numero_fim: fim,
+                        await api.post(`/eventos/${eventoId}/participantes/${p.id}/faixas/soltos`, {
+                          numeros,
                         });
                         form.reset();
                         await carregar();
@@ -260,7 +257,7 @@ export default function BailePlanilhaPage() {
                       }
                     }}
                   >
-                    <input name="n" placeholder="ex. 88 ou 200 a 203" className="w-28 h-7 px-1 rounded bg-surface-tertiary text-txt-primary" />
+                    <input name="n" placeholder="88, 91, 140" className="w-28 h-7 px-1 rounded bg-surface-tertiary text-txt-primary" />
                   </form>
                 </td>
                 <td className="px-3 py-2">

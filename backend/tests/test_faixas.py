@@ -32,6 +32,29 @@ def test_numerada_deriva_quantidade_ignora_payload(client, participante):
     assert faixa["quantidade"] == 10  # 19-10+1, ignora 999
 
 
+def test_numeros_soltos_nao_repetem_e_nao_pegam_o_do_outro(client, participante):
+    evento_id, pid = participante
+    base = f"/api/eventos/{evento_id}/participantes/{pid}/faixas"
+    r = client.post(f"{base}/soltos", json={"numeros": [88, 91, 88]})
+    assert r.status_code == 201, r.text
+    soltos = [f for f in r.json()["faixas"] if f["numero_inicio"] == f["numero_fim"]]
+    assert {f["numero_inicio"] for f in soltos} == {88, 91}
+    assert r.json()["qtd_cartoes_recebidos"] == 2
+
+    outro = client.post(
+        f"/api/eventos/{evento_id}/participantes/avulso",
+        json={"nome": "Outro"},
+    )
+    assert outro.status_code == 201, outro.text
+    oid = outro.json()["id"]
+    conflito = client.post(
+        f"/api/eventos/{evento_id}/participantes/{oid}/faixas/soltos",
+        json={"numeros": [91, 200]},
+    )
+    assert conflito.status_code == 400
+    assert "91" in conflito.text
+
+
 def test_numerada_fim_menor_que_inicio_400(client, participante):
     evento_id, pid = participante
     base = f"/api/eventos/{evento_id}/participantes/{pid}/faixas"

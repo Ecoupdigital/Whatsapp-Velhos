@@ -17,6 +17,7 @@ interface FaixasPanelProps {
 export function FaixasPanel({ eventoId, participante, onMutated }: FaixasPanelProps) {
   const base = `/eventos/${eventoId}/participantes/${participante.id}/faixas`;
   const [addNum, setAddNum] = useState({ inicio: "", fim: "" });
+  const [addSoltos, setAddSoltos] = useState("");
   const [addLote, setAddLote] = useState("");
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ inicio: "", fim: "", quantidade: "" });
@@ -41,6 +42,39 @@ export function FaixasPanel({ eventoId, participante, onMutated }: FaixasPanelPr
       after(resp);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Erro ao adicionar faixa");
+    } finally { setBusy(false); }
+  };
+
+  const handleAddSoltos = async () => {
+    const numeros: number[] = [];
+    for (const parte of addSoltos.split(/[,;\n]+/)) {
+      const faixa = parte.match(/(\d+)\s*(?:a|-)\s*(\d+)/i);
+      if (faixa) {
+        let ini = parseInt(faixa[1], 10);
+        let fim = parseInt(faixa[2], 10);
+        if (fim < ini) [ini, fim] = [fim, ini];
+        if (fim - ini > 200) {
+          toast.error("Faixa grande demais. Lança em pedaços menores.");
+          return;
+        }
+        for (let n = ini; n <= fim; n++) numeros.push(n);
+      } else {
+        for (const achado of parte.match(/\d+/g) || []) numeros.push(parseInt(achado, 10));
+      }
+    }
+    const unicos = [...new Set(numeros)].filter((n) => n > 0);
+    if (!unicos.length) {
+      toast.error("Informe os números, separados por vírgula. Ex.: 88, 91, 140");
+      return;
+    }
+    try {
+      setBusy(true);
+      const resp = await api.post<ParticipanteOut>(`${base}/soltos`, { numeros: unicos });
+      toast.success(unicos.length === 1 ? "Número adicionado" : `${unicos.length} números adicionados`);
+      setAddSoltos("");
+      after(resp);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao adicionar números");
     } finally { setBusy(false); }
   };
 
@@ -97,10 +131,11 @@ export function FaixasPanel({ eventoId, participante, onMutated }: FaixasPanelPr
     } finally { setBusy(false); }
   };
 
-  const label = (f: FaixaOut) =>
-    f.sem_numero
-      ? `Sem numero (${f.quantidade} cartoes)`
-      : `${f.numero_inicio} - ${f.numero_fim} (${f.quantidade} cartoes)`;
+  const label = (f: FaixaOut) => {
+    if (f.sem_numero) return `Sem número (${f.quantidade} cartões)`;
+    if (f.numero_inicio === f.numero_fim) return String(f.numero_inicio);
+    return `${f.numero_inicio} a ${f.numero_fim} (${f.quantidade} cartões)`;
+  };
 
   return (
     <div className="space-y-2">
@@ -144,6 +179,17 @@ export function FaixasPanel({ eventoId, participante, onMutated }: FaixasPanelPr
         </ul>
       )}
 
+      <div className="flex flex-wrap items-end gap-2 pt-1">
+        <Input
+          label="Números soltos"
+          containerClassName="w-56"
+          value={addSoltos}
+          placeholder="88, 91, 140"
+          onChange={(e) => setAddSoltos(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleAddSoltos(); }}
+        />
+        <Button size="sm" icon={<Plus size={13} />} loading={busy} onClick={handleAddSoltos}>Adicionar números</Button>
+      </div>
       <div className="flex flex-wrap items-end gap-2 pt-1">
         <Input label="Inicio" type="number" containerClassName="w-24" value={addNum.inicio}
           onChange={(e) => setAddNum((p) => ({ ...p, inicio: e.target.value }))} />

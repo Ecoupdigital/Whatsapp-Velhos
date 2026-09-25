@@ -4,6 +4,7 @@ import io
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
@@ -419,6 +420,68 @@ def listar_faixas(evento_id: int, participante_id: int, db: Session = Depends(ge
         .order_by(EventoCartaoFaixa.id)
         .all()
     )
+
+
+class NumerosSoltosIn(BaseModel):
+    numeros: list[int]
+
+
+@router.post("/{evento_id}/participantes/{participante_id}/faixas/soltos", response_model=ParticipanteOut, status_code=201)
+def adicionar_numeros_soltos(
+    evento_id: int,
+    participante_id: int,
+    data: NumerosSoltosIn,
+    db: Session = Depends(get_db),
+):
+    """Cada número vira um cartão avulso (início = fim). Não estica a faixa antiga."""
+    p = _carregar_participante(db, evento_id, participante_id)
+    numeros = []
+    for n in data.numeros:
+        if n < 1:
+            raise HTTPException(status_code=400, detail=f"Numero invalido: {n}")
+        if n not in numeros:
+            numeros.append(n)
+    if not numeros:
+        raise HTTPException(status_code=400, detail="Informe ao menos um numero")
+
+    ocupados: dict[int, tuple[int, str]] = {}
+    faixas = (
+        db.query(EventoCartaoFaixa)
+        .join(EventoParticipante, EventoParticipante.id == EventoCartaoFaixa.evento_participante_id)
+        .options(joinedload(EventoCartaoFaixa.participante).joinedload(EventoParticipante.jogador))
+        .filter(EventoParticipante.evento_id == evento_id, EventoCartaoFaixa.sem_numero == 0)
+        .all()
+    )
+    for f in faixas:
+        if f.numero_inicio is None or f.numero_fim is None:
+            continue
+        dono = f.participante
+        nome = dono.jogador.nome if dono and dono.jogador else (dono.nome_avulso if dono else "outro")
+        for n in range(f.numero_inicio, f.numero_fim + 1):
+            ocupados[n] = (f.evento_participante_id, nome or "outro")
+
+    conflitos = []
+    novos = []
+    for n in numeros:
+        dono = ocupados.get(n)
+        if dono is None:
+            novos.append(n)
+        elif dono[0] != p.id:
+            conflitos.append(f"{n} está com {dono[1]}")
+    if conflitos:
+        raise HTTPException(status_code=400, detail="Número já usado: " + ", ".join(conflitos))
+    if not novos:
+        return p
+    for n in novos:
+        db.add(EventoCartaoFaixa(
+            evento_participante_id=p.id,
+            numero_inicio=n,
+            numero_fim=n,
+            quantidade=1,
+            sem_numero=0,
+        ))
+    _pos_mutacao_faixa(db, p)
+    return p
 
 
 @router.post("/{evento_id}/participantes/{participante_id}/faixas", response_model=ParticipanteOut, status_code=201)
