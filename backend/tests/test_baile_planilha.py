@@ -161,6 +161,45 @@ def test_cria_e_marca_logo_do_patrocinio(client, TestingSession):
     assert atualizado.json()["resumo"]["patrocinios_marcados_pagos"] == 1
 
 
+def test_registrar_pagamento_de_patrocinio_entra_no_caixa(client, TestingSession):
+    db = TestingSession()
+    ev = Evento(tipo="baile", titulo="Baile", status="em_andamento", valor_cartao=180, valor_lucro=90)
+    db.add(ev)
+    db.commit()
+    pat = EventoPatrocinio(
+        evento_id=ev.id, nome_jogador="Jonathan", nome_patrocinador="Don Vicente",
+        valor=60, pago="nao",
+    )
+    db.add(pat)
+    db.commit()
+    evento_id, pat_id = ev.id, pat.id
+    antes = db.query(Transacao).count()
+    db.close()
+
+    r = client.post(
+        f"/api/eventos/{evento_id}/baile/patrocinios/{pat_id}/pagamento",
+        json={"valor": 60, "data": "2026-09-25"},
+    )
+    assert r.status_code == 200, r.text
+    item = next(p for p in r.json()["patrocinios"] if p["id"] == pat_id)
+    assert item["pago"] == "sim"
+    assert item["valor_vinculado"] == 60
+    assert r.json()["resumo"]["caixa_patrocinio"] == 60
+
+    db = TestingSession()
+    assert db.query(Transacao).count() == antes + 1
+    tx = db.query(Transacao).filter(Transacao.categoria == "patrocinio").one()
+    assert tx.valor == 60
+    assert tx.evento_id == evento_id
+    db.close()
+
+    de_novo = client.post(
+        f"/api/eventos/{evento_id}/baile/patrocinios/{pat_id}/pagamento",
+        json={"valor": 60},
+    )
+    assert de_novo.status_code == 400
+
+
 def test_um_pix_de_120_cobre_dois_patrocinios(client, TestingSession):
     db = TestingSession()
     ev = Evento(tipo="baile", titulo="Baile", status="em_andamento", valor_cartao=180, valor_lucro=90)

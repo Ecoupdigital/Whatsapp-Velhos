@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Button, Card, Input } from "@/components/ui";
+import { Button, Card, Input, Modal, ModalBody, ModalFooter, ModalHeader, Select } from "@/components/ui";
 import { BaileAbas } from "@/components/eventos/BaileAbas";
 
 type Patrocinio = {
@@ -39,11 +39,16 @@ const LOGOS = [
   { value: "pendente", label: "Pendente" },
   { value: "nao", label: "Sem logo" },
 ];
-const PAGOS = [
-  { value: "sim", label: "Pago" },
-  { value: "nao", label: "Em aberto" },
-  { value: "a_confirmar", label: "A confirmar" },
-];
+function hoje() {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+function coberto(p: Patrocinio) {
+  return p.valor_vinculado >= p.valor - 0.02;
+}
 
 export default function PatrociniosDoBailePage() {
   const params = useParams();
@@ -52,6 +57,11 @@ export default function PatrociniosDoBailePage() {
   const [filtro, setFiltro] = useState<"todos" | "pagos" | "abertos" | "sem_logo">("todos");
   const [busca, setBusca] = useState("");
   const [form, setForm] = useState({ jogador: "", patrocinador: "", contato: "" });
+  const [contas, setContas] = useState<{ id: number; nome: string; tipo: string; ativo: number }[]>([]);
+  const [pagando, setPagando] = useState<Patrocinio | null>(null);
+  const [payForm, setPayForm] = useState({ valor: "", data: hoje(), conta_id: "" });
+  const [paySaving, setPaySaving] = useState(false);
+  const [payReady, setPayReady] = useState(false);
 
   const carregar = useCallback(async () => {
     const data = await api.get<Visao>(`/eventos/${eventoId}/baile`);
@@ -60,7 +70,58 @@ export default function PatrociniosDoBailePage() {
 
   useEffect(() => {
     carregar().catch(() => toast.error("Não consegui abrir os patrocínios deste baile"));
+    api.get<{ id: number; nome: string; tipo: string; ativo: number }[]>("/contas")
+      .then(setContas)
+      .catch(() => {});
   }, [carregar]);
+
+  useEffect(() => {
+    if (!pagando) {
+      setPayReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setPayReady(true), 400);
+    return () => window.clearTimeout(timer);
+  }, [pagando]);
+
+  const abrirPagamento = (pat: Patrocinio) => {
+    const falta = Math.max(0, pat.valor - pat.valor_vinculado);
+    const conta = contas.find((c) => c.ativo === 1);
+    setPayReady(false);
+    setPagando(pat);
+    setPayForm({
+      valor: falta > 0 ? String(falta) : "",
+      data: hoje(),
+      conta_id: conta ? String(conta.id) : "",
+    });
+  };
+
+  const registrarPagamento = async () => {
+    if (!pagando) return;
+    const valor = parseFloat(payForm.valor);
+    if (!valor || valor <= 0) {
+      toast.error("Valor inválido");
+      return;
+    }
+    try {
+      setPaySaving(true);
+      const data = await api.post<Visao>(
+        `/eventos/${eventoId}/baile/patrocinios/${pagando.id}/pagamento`,
+        {
+          valor,
+          data: payForm.data || null,
+          conta_id: payForm.conta_id ? parseInt(payForm.conta_id, 10) : null,
+        },
+      );
+      setVisao(data);
+      setPagando(null);
+      toast.success("Pagamento lançado no caixa");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao registrar");
+    } finally {
+      setPaySaving(false);
+    }
+  };
 
   const salvar = async (pat: Patrocinio, campo: "logo_enviado" | "pago", valor: string) => {
     try {
@@ -99,8 +160,8 @@ export default function PatrociniosDoBailePage() {
     if (!visao) return [];
     const q = busca.trim().toLowerCase();
     return visao.patrocinios.filter((p) => {
-      if (filtro === "pagos" && p.pago !== "sim") return false;
-      if (filtro === "abertos" && p.pago === "sim") return false;
+      if (filtro === "pagos" && !coberto(p)) return false;
+      if (filtro === "abertos" && coberto(p)) return false;
       if (filtro === "sem_logo" && p.logo_enviado === "sim") return false;
       if (!q) return true;
       return `${p.nome_jogador || ""} ${p.nome_patrocinador} ${p.contato || ""}`.toLowerCase().includes(q);
@@ -120,7 +181,7 @@ export default function PatrociniosDoBailePage() {
         <BaileAbas eventoId={eventoId} atual="patrocinios" />
         <div>
           <h1 className="text-2xl font-display font-bold text-txt-primary uppercase">Patrocínios do baile</h1>
-          <p className="text-sm text-txt-tertiary">{visao.titulo}. Cada cota é R$ 60. O dinheiro do caixa se amarra na aba Cartões.</p>
+          <p className="text-sm text-txt-tertiary">{visao.titulo}. Cada cota é R$ 60. Registrar o pagamento gera o lançamento no caixa.</p>
         </div>
       </div>
 
@@ -131,8 +192,8 @@ export default function PatrociniosDoBailePage() {
         </Card>
         <Card padding="md">
           <p className="text-xs text-txt-tertiary uppercase">Pagos</p>
-          <p className="text-2xl font-bold text-txt-primary">{r.patrocinios_marcados_pagos}</p>
-          <p className="text-xs text-txt-tertiary">{formatCurrency(r.patrocinios_valor_marcado)} marcados</p>
+          <p className="text-2xl font-bold text-txt-primary">{visao.patrocinios.filter(coberto).length}</p>
+          <p className="text-xs text-txt-tertiary">com lançamento no caixa</p>
         </Card>
         <Card padding="md">
           <p className="text-xs text-txt-tertiary uppercase">No caixa</p>
@@ -195,13 +256,11 @@ export default function PatrociniosDoBailePage() {
                   </select>
                 </td>
                 <td className="px-3 py-2">
-                  <select
-                    value={p.pago === "negociacao" ? "a_confirmar" : p.pago}
-                    className="h-8 rounded bg-surface-tertiary text-txt-primary text-xs"
-                    onChange={(e) => salvar(p, "pago", e.target.value)}
-                  >
-                    {PAGOS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
+                  {coberto(p) ? (
+                    <span className="text-xs text-emerald-400">Pago</span>
+                  ) : (
+                    <Button size="sm" onClick={() => abrirPagamento(p)}>Registrar</Button>
+                  )}
                 </td>
                 <td className="px-3 py-2 font-mono text-emerald-400">
                   {p.valor_vinculado > 0 ? formatCurrency(p.valor_vinculado) : "sem lançamento"}
@@ -215,6 +274,49 @@ export default function PatrociniosDoBailePage() {
           </tbody>
         </table>
       </Card>
+
+      <Modal open={!!pagando} onClose={() => setPagando(null)} size="sm">
+        <ModalHeader>
+          Registrar pagamento{pagando ? ` - ${pagando.nome_patrocinador}` : ""}
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          {pagando && (
+            <p className="text-xs text-txt-tertiary">
+              No caixa: {formatCurrency(pagando.valor_vinculado)} de {formatCurrency(pagando.valor)}. Falta {formatCurrency(Math.max(0, pagando.valor - pagando.valor_vinculado))}.
+            </p>
+          )}
+          <Input
+            label="Valor (R$)"
+            type="number"
+            min={0}
+            step={0.01}
+            value={payForm.valor}
+            onChange={(e) => setPayForm((f) => ({ ...f, valor: e.target.value }))}
+          />
+          <Input
+            label="Data"
+            type="date"
+            value={payForm.data}
+            onChange={(e) => setPayForm((f) => ({ ...f, data: e.target.value }))}
+          />
+          <Select
+            label="Conta"
+            placeholder="Sem conta"
+            options={contas.filter((c) => c.ativo === 1).map((c) => ({
+              value: String(c.id),
+              label: `${c.nome} (${c.tipo})`,
+            }))}
+            value={payForm.conta_id}
+            onChange={(e) => setPayForm((f) => ({ ...f, conta_id: e.target.value }))}
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="secondary" onClick={() => setPagando(null)}>Cancelar</Button>
+          <Button type="button" loading={paySaving} disabled={!payReady} onClick={registrarPagamento}>
+            Registrar
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

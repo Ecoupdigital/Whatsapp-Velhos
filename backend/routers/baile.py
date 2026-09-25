@@ -6,6 +6,7 @@ lugar quando alguem vincula o lancamento existente.
 """
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -56,6 +57,12 @@ class PatrocinioIn(BaseModel):
     data_pagamento: str | None = None
     contato: str | None = None
     observacoes: str | None = None
+
+
+class PatrocinioPagamentoIn(BaseModel):
+    valor: float
+    data: str | None = None
+    conta_id: int | None = None
 
 
 class PatrocinioPatch(BaseModel):
@@ -437,6 +444,71 @@ def atualizar_patrocinio(
         pat.jogador_id = quem.jogador_id if quem else None
     for k, v in payload.items():
         setattr(pat, k, v.strip() if isinstance(v, str) else v)
+    db.commit()
+    return _visao(db, evento)
+
+
+def _ja_vinculado_patrocinio(db: Session, pat: EventoPatrocinio) -> float:
+    partes = db.query(BaileVinculo).filter(BaileVinculo.patrocinio_id == pat.id).all()
+    if partes:
+        return float(sum(v.valor or 0 for v in partes))
+    legado = (
+        db.query(Transacao)
+        .filter(Transacao.patrocinio_id == pat.id, Transacao.tipo == "entrada")
+        .all()
+    )
+    total = 0.0
+    teto = float(pat.valor or 0)
+    for t in legado:
+        total += min(float(t.valor or 0), teto) if teto else float(t.valor or 0)
+    return total
+
+
+@router.post("/{evento_id}/baile/patrocinios/{patrocinio_id}/pagamento")
+def registrar_pagamento_patrocinio(
+    evento_id: int,
+    patrocinio_id: int,
+    data: PatrocinioPagamentoIn,
+    db: Session = Depends(get_db),
+):
+    """Gera o lançamento no caixa, no mesmo espírito do pagamento do cartão."""
+    evento = _evento(db, evento_id)
+    pat = (
+        db.query(EventoPatrocinio)
+        .filter(EventoPatrocinio.id == patrocinio_id, EventoPatrocinio.evento_id == evento_id)
+        .first()
+    )
+    if not pat:
+        raise HTTPException(status_code=404, detail="Patrocinio nao encontrado")
+    if data.valor <= 0:
+        raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
+    ja = _ja_vinculado_patrocinio(db, pat)
+    falta = round(float(pat.valor or 0) - ja, 2)
+    if data.valor > falta + 0.02:
+        raise HTTPException(status_code=400, detail=f"Falta R$ {falta:.2f} neste patrocinio")
+
+    data_pgto = data.data or datetime.now().strftime("%Y-%m-%d")
+    quem = f" ({pat.nome_jogador})" if pat.nome_jogador else ""
+    tx = Transacao(
+        tipo="entrada",
+        categoria="patrocinio",
+        descricao=f"Patrocinio {evento.titulo} - {pat.nome_patrocinador}{quem}",
+        valor=data.valor,
+        data=data_pgto,
+        jogador_id=pat.jogador_id,
+        evento_id=evento_id,
+        conta_id=data.conta_id,
+    )
+    db.add(tx)
+    db.flush()
+    db.add(BaileVinculo(
+        transacao_id=tx.id,
+        evento_id=evento_id,
+        patrocinio_id=pat.id,
+        valor=data.valor,
+    ))
+    pat.data_pagamento = data_pgto
+    pat.pago = "sim" if ja + data.valor >= float(pat.valor or 0) - 0.02 else "a_confirmar"
     db.commit()
     return _visao(db, evento)
 
