@@ -648,6 +648,20 @@ def registrar_pagamento(
     if data.valor <= 0:
         raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
 
+    if p.evento:
+        _recalcular_valor_esperado(p, p.evento)
+    ja_pago = (
+        db.query(func.coalesce(func.sum(Transacao.valor), 0.0))
+        .filter(Transacao.evento_participante_id == p.id, Transacao.tipo == "entrada")
+        .scalar()
+    ) or 0.0
+    falta = round(float(p.valor or 0) - float(ja_pago), 2)
+    if data.valor > falta + 0.02:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Falta R$ {falta:.2f}. Cartao novo nao entra como pago junto com o valor anterior.",
+        )
+
     nome = _nome_participante(p)
     titulo = p.evento.titulo if p.evento else f"Evento {evento_id}"
     data_pgto = data.data or datetime.now().strftime("%Y-%m-%d")

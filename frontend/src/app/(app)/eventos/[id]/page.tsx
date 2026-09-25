@@ -199,6 +199,7 @@ export default function EventoDetailPage() {
     conta_id: "",
   });
   const [paySaving, setPaySaving] = useState(false);
+  const [payReady, setPayReady] = useState(false);
 
   // Historico expand
   const [expandedParticipanteId, setExpandedParticipanteId] = useState<number | null>(null);
@@ -359,7 +360,17 @@ export default function EventoDetailPage() {
     }
   };
 
+  useEffect(() => {
+    if (!payModalOpen) {
+      setPayReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setPayReady(true), 400);
+    return () => window.clearTimeout(timer);
+  }, [payModalOpen]);
+
   const openPayModal = (part: ParticipanteOut) => {
+    setPayReady(false);
     setPayParticipante(part);
     const falta = Math.max(0, (part.valor || 0) - (part.valor_pago || 0));
     const defaultConta = contas.find((c) => c.ativo === 1);
@@ -1144,7 +1155,7 @@ export default function EventoDetailPage() {
           <Button variant="secondary" onClick={() => setPayModalOpen(false)}>
             Cancelar
           </Button>
-          <Button loading={paySaving} onClick={handleRegistrarPagamento}>
+          <Button type="button" loading={paySaving} disabled={!payReady} onClick={handleRegistrarPagamento}>
             Registrar
           </Button>
         </ModalFooter>
