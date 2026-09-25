@@ -62,7 +62,7 @@ export function FaixasPanel({ eventoId, participante, onMutated }: FaixasPanelPr
         for (const achado of parte.match(/\d+/g) || []) numeros.push(parseInt(achado, 10));
       }
     }
-    const unicos = [...new Set(numeros)].filter((n) => n > 0);
+    const unicos = Array.from(new Set(numeros)).filter((n) => n > 0);
     if (!unicos.length) {
       toast.error("Informe os números, separados por vírgula. Ex.: 88, 91, 140");
       return;
