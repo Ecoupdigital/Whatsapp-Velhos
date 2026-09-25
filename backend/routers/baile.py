@@ -32,7 +32,8 @@ router = APIRouter(
 )
 
 RESPOSTAS = {"respondeu", "a_confirmar", "sem_resposta"}
-ACERTOS = {"sim", "nao", "a_confirmar"}
+ACERTOS = {"sim", "nao", "a_confirmar", "negociacao"}
+LOGOS = {"sim", "nao", "pendente"}
 
 
 class PlanilhaIn(BaseModel):
@@ -44,6 +45,28 @@ class PlanilhaIn(BaseModel):
     observacoes: str | None = None
     numero_inicio: int | None = None
     numero_fim: int | None = None
+
+
+class PatrocinioIn(BaseModel):
+    nome_jogador: str | None = None
+    nome_patrocinador: str
+    valor: float = 60
+    logo_enviado: str = "nao"
+    pago: str = "nao"
+    data_pagamento: str | None = None
+    contato: str | None = None
+    observacoes: str | None = None
+
+
+class PatrocinioPatch(BaseModel):
+    nome_jogador: str | None = None
+    nome_patrocinador: str | None = None
+    valor: float | None = None
+    logo_enviado: str | None = None
+    pago: str | None = None
+    data_pagamento: str | None = None
+    contato: str | None = None
+    observacoes: str | None = None
 
 
 class VincularIn(BaseModel):
@@ -233,6 +256,8 @@ def _visao(db: Session, evento: Evento) -> dict:
             "logo_enviado": pat.logo_enviado or "nao",
             "pago": pat.pago or "nao",
             "data_pagamento": pat.data_pagamento,
+            "contato": pat.contato,
+            "observacoes": pat.observacoes,
             "participante_id": pat.participante_id,
             "valor_vinculado": vinculado,
         })
@@ -327,6 +352,91 @@ def atualizar_planilha(
     p.evento = evento
     _recalcular_valor_esperado(p, evento)
     _sincronizar_caixa(db, p, evento)
+    db.commit()
+    return _visao(db, evento)
+
+
+def _achar_participante(db: Session, evento_id: int, nome: str | None):
+    if not nome:
+        return None
+    alvo = nome.strip().lower()
+    parts = (
+        db.query(EventoParticipante)
+        .options(joinedload(EventoParticipante.jogador))
+        .filter(EventoParticipante.evento_id == evento_id)
+        .all()
+    )
+    for p in parts:
+        candidatos = [p.nome_avulso or ""]
+        if p.jogador:
+            candidatos.extend([p.jogador.nome or "", p.jogador.apelido or ""])
+        if any(c.strip().lower() == alvo for c in candidatos if c):
+            return p
+    return None
+
+
+@router.post("/{evento_id}/baile/patrocinios", status_code=201)
+def criar_patrocinio(evento_id: int, data: PatrocinioIn, db: Session = Depends(get_db)):
+    evento = _evento(db, evento_id)
+    if data.logo_enviado not in LOGOS or data.pago not in ACERTOS:
+        raise HTTPException(status_code=400, detail="Logo ou pago invalido")
+    if data.valor < 0:
+        raise HTTPException(status_code=400, detail="Valor invalido")
+    existe = (
+        db.query(EventoPatrocinio)
+        .filter(
+            EventoPatrocinio.evento_id == evento_id,
+            EventoPatrocinio.nome_jogador == (data.nome_jogador or None),
+            EventoPatrocinio.nome_patrocinador == data.nome_patrocinador.strip(),
+        )
+        .first()
+    )
+    if existe:
+        raise HTTPException(status_code=400, detail="Esse patrocinio ja esta na lista")
+    quem = _achar_participante(db, evento_id, data.nome_jogador)
+    db.add(EventoPatrocinio(
+        evento_id=evento_id,
+        participante_id=quem.id if quem else None,
+        jogador_id=quem.jogador_id if quem else None,
+        nome_jogador=(data.nome_jogador or "").strip() or None,
+        nome_patrocinador=data.nome_patrocinador.strip(),
+        valor=data.valor,
+        logo_enviado=data.logo_enviado,
+        pago=data.pago,
+        data_pagamento=data.data_pagamento,
+        contato=data.contato,
+        observacoes=data.observacoes,
+    ))
+    db.commit()
+    return _visao(db, evento)
+
+
+@router.put("/{evento_id}/baile/patrocinios/{patrocinio_id}")
+def atualizar_patrocinio(
+    evento_id: int,
+    patrocinio_id: int,
+    data: PatrocinioPatch,
+    db: Session = Depends(get_db),
+):
+    evento = _evento(db, evento_id)
+    pat = (
+        db.query(EventoPatrocinio)
+        .filter(EventoPatrocinio.id == patrocinio_id, EventoPatrocinio.evento_id == evento_id)
+        .first()
+    )
+    if not pat:
+        raise HTTPException(status_code=404, detail="Patrocinio nao encontrado")
+    payload = data.model_dump(exclude_unset=True)
+    if "logo_enviado" in payload and payload["logo_enviado"] not in LOGOS:
+        raise HTTPException(status_code=400, detail="Logo invalido")
+    if "pago" in payload and payload["pago"] not in ACERTOS:
+        raise HTTPException(status_code=400, detail="Pago invalido")
+    if "nome_jogador" in payload:
+        quem = _achar_participante(db, evento_id, payload["nome_jogador"])
+        pat.participante_id = quem.id if quem else None
+        pat.jogador_id = quem.jogador_id if quem else None
+    for k, v in payload.items():
+        setattr(pat, k, v.strip() if isinstance(v, str) else v)
     db.commit()
     return _visao(db, evento)
 

@@ -133,6 +133,34 @@ def test_vincular_nao_duplica_o_lancamento(client, TestingSession):
     db.close()
 
 
+def test_cria_e_marca_logo_do_patrocinio(client, TestingSession):
+    db = TestingSession()
+    ev = Evento(tipo="baile", titulo="Baile", status="em_andamento", valor_cartao=180, valor_lucro=90)
+    db.add(ev)
+    db.commit()
+    evento_id = ev.id
+    db.close()
+
+    criado = client.post(
+        f"/api/eventos/{evento_id}/baile/patrocinios",
+        json={"nome_jogador": "Jonathan", "nome_patrocinador": "Don Vicente", "valor": 60},
+    )
+    assert criado.status_code == 201, criado.text
+    pat = criado.json()["patrocinios"][0]
+    assert pat["pago"] == "nao"
+    assert pat["logo_enviado"] == "nao"
+
+    atualizado = client.put(
+        f"/api/eventos/{evento_id}/baile/patrocinios/{pat['id']}",
+        json={"logo_enviado": "sim", "pago": "sim"},
+    )
+    assert atualizado.status_code == 200, atualizado.text
+    pat = atualizado.json()["patrocinios"][0]
+    assert pat["logo_enviado"] == "sim"
+    assert pat["pago"] == "sim"
+    assert atualizado.json()["resumo"]["patrocinios_marcados_pagos"] == 1
+
+
 def test_um_pix_de_120_cobre_dois_patrocinios(client, TestingSession):
     db = TestingSession()
     ev = Evento(tipo="baile", titulo="Baile", status="em_andamento", valor_cartao=180, valor_lucro=90)
