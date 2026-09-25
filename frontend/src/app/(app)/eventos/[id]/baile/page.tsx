@@ -6,7 +6,7 @@ import { Upload } from "lucide-react";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Button, Card } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { BaileAbas } from "@/components/eventos/BaileAbas";
 
 type Participante = {
