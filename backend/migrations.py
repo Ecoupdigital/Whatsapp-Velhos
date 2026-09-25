@@ -78,11 +78,45 @@ def _backfill_faixas(engine):
         db.close()
 
 
+def _add_columns(engine, table, columns):
+    """ADD COLUMN para cada (nome, ddl) que ainda nao existe. ddl inclui o tipo."""
+    insp = inspect(engine)
+    if table not in insp.get_table_names():
+        return
+    existentes = {c["name"] for c in insp.get_columns(table)}
+    faltando = [(nome, ddl) for nome, ddl in columns if nome not in existentes]
+    if not faltando:
+        return
+    with engine.begin() as conn:
+        for nome, ddl in faltando:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {nome} {ddl}"))
+            log.info("migrations: coluna %s.%s adicionada", table, nome)
+
+
+def _add_colunas_baile(engine):
+    """Colunas da planilha do baile. Nao altera colunas que o galeto ja usa."""
+    _add_columns(engine, "eventos", [
+        ("valor_lucro", "FLOAT DEFAULT 0"),
+        ("valor_brinde", "FLOAT DEFAULT 0"),
+    ])
+    _add_columns(engine, "evento_participantes", [
+        ("qtd_venda", "FLOAT"),
+        ("qtd_lucro", "FLOAT DEFAULT 0"),
+        ("qtd_brindes", "FLOAT DEFAULT 0"),
+        ("status_resposta", "TEXT DEFAULT 'sem_resposta'"),
+        ("acerto", "TEXT DEFAULT 'nao'"),
+    ])
+    _add_columns(engine, "transacoes", [
+        ("patrocinio_id", "INTEGER"),
+    ])
+
+
 def run_additive_migrations(engine):
     """Ponto de entrada chamado no boot apos Base.metadata.create_all.
 
-    Ordem: (1) ADD COLUMN tipos_item, (2) backfill de faixas.
+    Ordem: (1) ADD COLUMN tipos_item, (2) backfill de faixas, (3) colunas do baile.
     Seguro rodar N vezes (idempotente).
     """
     _add_column_tipos_item(engine)
+    _add_colunas_baile(engine)
     _backfill_faixas(engine)

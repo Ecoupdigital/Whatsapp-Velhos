@@ -383,7 +383,7 @@ class EventoResumo(BaseModel):
     percentual_meta: float
     meta_arrecadacao: float
     cartoes_emitidos: int = 0
-    cartoes_vendidos: int = 0
+    cartoes_vendidos: float = 0
     cartoes_devolvidos: int = 0
     cartoes_pagou_custo: int = 0
     proximo_numero: int = 1

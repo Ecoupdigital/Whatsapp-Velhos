@@ -891,6 +891,16 @@ export default function EventoDetailPage() {
           >
             Convidado avulso
           </Button>
+          {evento?.tipo === "baile" && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Ticket />}
+              onClick={() => router.push(`/eventos/${eventoId}/baile`)}
+            >
+              Planilha do baile
+            </Button>
+          )}
           <Button
             size="sm"
             variant="secondary"

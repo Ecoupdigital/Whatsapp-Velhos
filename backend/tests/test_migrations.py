@@ -8,7 +8,7 @@ Cobre os requisitos:
 Cada teste opera sobre um banco SQLite temporario isolado (fixture legacy_engine
 do conftest.py). O banco real velhos.db nunca e tocado.
 """
-from sqlalchemy import inspect, func
+from sqlalchemy import inspect, func, text
 from sqlalchemy.orm import sessionmaker
 
 import models  # noqa: F401 -- garante mappers registrados
@@ -76,9 +76,12 @@ def test_test01_contagem_recebidos_preservada(legacy_engine):
 
     # Captura recebidos ANTES da migracao (estado legado)
     db = S()
+    # SQL cru: o schema legado ainda nao tem as colunas novas do baile.
     recebidos_antes = {
-        p.id: (p.qtd_cartoes_recebidos or 0)
-        for p in db.query(models.EventoParticipante).all()
+        row[0]: (row[1] or 0)
+        for row in db.execute(text(
+            "SELECT id, qtd_cartoes_recebidos FROM evento_participantes"
+        ))
     }
     db.close()
 

@@ -85,6 +85,7 @@ class Transacao(Base):
     conta_id = Column(Integer, ForeignKey("contas.id"))
     mensalidade_id = Column(Integer, ForeignKey("mensalidades.id", ondelete="SET NULL"))
     evento_participante_id = Column(Integer, ForeignKey("evento_participantes.id", ondelete="SET NULL"))
+    patrocinio_id = Column(Integer, ForeignKey("evento_patrocinios.id", ondelete="SET NULL"))
     comprovante = Column(Text)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 
@@ -107,6 +108,8 @@ class Evento(Base):
     meta_arrecadacao = Column(Float, default=0)
     valor_cartao = Column(Float, default=0)
     custo_cartao = Column(Float, default=0)
+    valor_lucro = Column(Float, default=0)  # quanto o atleta paga quando acerta so o lucro do cartao
+    valor_brinde = Column(Float, default=0)  # referencia, nao entra no caixa
     qtd_cartoes_padrao_jogador = Column(Integer, default=0)
     qtd_cartoes_padrao_socio = Column(Integer, default=0)
     tipos_item = Column(Text)  # JSON serializado, ex: '["cru","assado"]'. NULL/"[]" = sem split por tipo.
@@ -137,6 +140,11 @@ class EventoParticipante(Base):
     numero_inicio = Column(Integer)
     numero_fim = Column(Integer)
     qtd_vendidos = Column(Integer, default=0)
+    qtd_venda = Column(Float)  # vendidos da planilha do baile, aceita meio cartao. NULL = usa qtd_vendidos
+    qtd_lucro = Column(Float, default=0)
+    qtd_brindes = Column(Float, default=0)
+    status_resposta = Column(Text, default="sem_resposta")  # respondeu | a_confirmar | sem_resposta
+    acerto = Column(Text, default="nao")  # sim | nao | a_confirmar. Marca da planilha, nao e o caixa
     qtd_devolvidos = Column(Integer, default=0)
     qtd_pagou_custo = Column(Integer, default=0)
     observacoes = Column(Text)
@@ -306,6 +314,32 @@ class EventoCartaoFaixa(Base):
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
 
     participante = relationship("EventoParticipante", back_populates="faixas")
+
+
+class EventoPatrocinio(Base):
+    __tablename__ = "evento_patrocinios"
+    __table_args__ = (
+        Index("ix_patrocinio_evento", "evento_id"),
+        Index("ix_patrocinio_nome", "evento_id", "nome_jogador", "nome_patrocinador", unique=True),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    evento_id = Column(Integer, ForeignKey("eventos.id", ondelete="CASCADE"), nullable=False)
+    participante_id = Column(Integer, ForeignKey("evento_participantes.id", ondelete="SET NULL"))
+    jogador_id = Column(Integer, ForeignKey("jogadores.id", ondelete="SET NULL"))
+    nome_jogador = Column(Text)
+    nome_patrocinador = Column(Text, nullable=False)
+    valor = Column(Float, default=60)
+    logo_enviado = Column(Text, default="nao")  # sim | nao | pendente
+    pago = Column(Text, default="nao")  # sim | nao | negociacao. Marca da planilha
+    data_pagamento = Column(Text)
+    contato = Column(Text)
+    observacoes = Column(Text)
+    created_at = Column(Text, default=lambda: datetime.now().isoformat())
+
+    evento = relationship("Evento")
+    participante = relationship("EventoParticipante")
+    jogador = relationship("Jogador")
 
 
 class EventoParticipanteItem(Base):

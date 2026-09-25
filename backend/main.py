@@ -9,7 +9,7 @@ from models import Usuario, Conta
 from auth import hash_password
 from migrations import run_additive_migrations
 
-from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes, contas, campanhas, portal
+from routers import auth, jogadores, mensalidades, financeiro, eventos, jogos, cartoes, promocoes, whatsapp, dashboard, configuracoes, contas, campanhas, portal, baile
 from routers.configuracoes import seed_defaults as seed_default_configs
 from services.scheduler import start_scheduler, stop_scheduler
 from services.campanha_service import UPLOAD_DIR
@@ -41,6 +41,7 @@ app.include_router(jogadores.router)
 app.include_router(mensalidades.router)
 app.include_router(financeiro.router)
 app.include_router(eventos.router)
+app.include_router(baile.router)
 app.include_router(jogos.router)
 app.include_router(cartoes.router)
 app.include_router(promocoes.router)

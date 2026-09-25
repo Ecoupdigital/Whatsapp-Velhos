@@ -168,11 +168,19 @@ def _proximo_numero(db: Session, evento_id: int) -> int:
     return max(max_part or 0, max_faixa or 0) + 1
 
 
+def qtd_venda_efetiva(p: EventoParticipante) -> float:
+    """Vendidos da planilha do baile (aceita meio cartao) ou o inteiro do galeto."""
+    if p.qtd_venda is not None:
+        return float(p.qtd_venda)
+    return float(p.qtd_vendidos or 0)
+
+
 def _recalcular_valor_esperado(p: EventoParticipante, evento: Evento):
-    """Valor esperado = vendidos*valor_cartao + pagou_custo*custo_cartao."""
-    if evento.valor_cartao or evento.custo_cartao:
+    """Valor esperado = vendidos*valor_cartao + lucro*valor_lucro + pagou_custo*custo_cartao."""
+    if evento.valor_cartao or evento.custo_cartao or (evento.valor_lucro or 0):
         valor = (
-            (p.qtd_vendidos or 0) * (evento.valor_cartao or 0)
+            qtd_venda_efetiva(p) * (evento.valor_cartao or 0)
+            + float(p.qtd_lucro or 0) * (evento.valor_lucro or 0)
             + (p.qtd_pagou_custo or 0) * (evento.custo_cartao or 0)
         )
         p.valor = float(valor)
@@ -184,6 +192,10 @@ def _recalc_recebidos(p: EventoParticipante):
 
 
 def _validar_reconciliacao(p: EventoParticipante):
+    # No baile a pessoa vende alem da cota e acerta lucro. O teto de recebidos vale so pro galeto.
+    evento = getattr(p, "evento", None)
+    if evento is not None and (evento.valor_lucro or 0) > 0:
+        return
     total_destino = (p.qtd_vendidos or 0) + (p.qtd_devolvidos or 0) + (p.qtd_pagou_custo or 0)
     if total_destino > (p.qtd_cartoes_recebidos or 0):
         raise HTTPException(
@@ -654,7 +666,7 @@ def resumo_evento(evento_id: int, db: Session = Depends(get_db)):
     pct = (valor_arrecadado / meta * 100) if meta > 0 else 0.0
 
     cartoes_emitidos = sum(p.qtd_cartoes_recebidos or 0 for p in parts)
-    cartoes_vendidos = sum(p.qtd_vendidos or 0 for p in parts)
+    cartoes_vendidos = sum(qtd_venda_efetiva(p) for p in parts)
     cartoes_devolvidos = sum(p.qtd_devolvidos or 0 for p in parts)
     cartoes_pagou_custo = sum(p.qtd_pagou_custo or 0 for p in parts)
     proximo_num = _proximo_numero(db, evento_id)
