@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { Button, Card, Input } from "@/components/ui";
-import type { EventoOut } from "@/types";
+import { BaileAbas } from "@/components/eventos/BaileAbas";
 
 type Patrocinio = {
   id: number;
@@ -44,31 +45,26 @@ const PAGOS = [
   { value: "a_confirmar", label: "A confirmar" },
 ];
 
-export default function PatrociniosPage() {
+export default function PatrociniosDoBailePage() {
+  const params = useParams();
+  const eventoId = String(params.id);
   const [visao, setVisao] = useState<Visao | null>(null);
   const [filtro, setFiltro] = useState<"todos" | "pagos" | "abertos" | "sem_logo">("todos");
   const [busca, setBusca] = useState("");
   const [form, setForm] = useState({ jogador: "", patrocinador: "", contato: "" });
 
   const carregar = useCallback(async () => {
-    const eventos = await api.get<EventoOut[]>("/eventos?tipo=baile");
-    const baile = eventos.find((e) => e.status === "em_andamento") || eventos[0];
-    if (!baile) {
-      setVisao(null);
-      return;
-    }
-    const data = await api.get<Visao>(`/eventos/${baile.id}/baile`);
+    const data = await api.get<Visao>(`/eventos/${eventoId}/baile`);
     setVisao(data);
-  }, []);
+  }, [eventoId]);
 
   useEffect(() => {
-    carregar().catch(() => toast.error("Não consegui abrir os patrocínios"));
+    carregar().catch(() => toast.error("Não consegui abrir os patrocínios deste baile"));
   }, [carregar]);
 
   const salvar = async (pat: Patrocinio, campo: "logo_enviado" | "pago", valor: string) => {
-    if (!visao) return;
     try {
-      const data = await api.put<Visao>(`/eventos/${visao.evento_id}/baile/patrocinios/${pat.id}`, {
+      const data = await api.put<Visao>(`/eventos/${eventoId}/baile/patrocinios/${pat.id}`, {
         [campo]: valor,
       });
       setVisao(data);
@@ -78,13 +74,12 @@ export default function PatrociniosPage() {
   };
 
   const criar = async () => {
-    if (!visao) return;
     if (!form.patrocinador.trim()) {
       toast.error("Informe o nome do patrocinador");
       return;
     }
     try {
-      const data = await api.post<Visao>(`/eventos/${visao.evento_id}/baile/patrocinios`, {
+      const data = await api.post<Visao>(`/eventos/${eventoId}/baile/patrocinios`, {
         nome_jogador: form.jogador.trim() || null,
         nome_patrocinador: form.patrocinador.trim(),
         contato: form.contato.trim() || null,
@@ -121,9 +116,12 @@ export default function PatrociniosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold text-txt-primary uppercase">Patrocínios</h1>
-        <p className="text-sm text-txt-tertiary">{visao.titulo}. Cada cota é R$ 60. O caixa só muda quando um lançamento é vinculado na planilha do baile.</p>
+      <div className="space-y-3">
+        <BaileAbas eventoId={eventoId} atual="patrocinios" />
+        <div>
+          <h1 className="text-2xl font-display font-bold text-txt-primary uppercase">Patrocínios do baile</h1>
+          <p className="text-sm text-txt-tertiary">{visao.titulo}. Cada cota é R$ 60. O dinheiro do caixa se amarra na aba Cartões.</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -134,7 +132,7 @@ export default function PatrociniosPage() {
         <Card padding="md">
           <p className="text-xs text-txt-tertiary uppercase">Pagos</p>
           <p className="text-2xl font-bold text-txt-primary">{r.patrocinios_marcados_pagos}</p>
-          <p className="text-xs text-txt-tertiary">{formatCurrency(r.patrocinios_valor_marcado)} na planilha</p>
+          <p className="text-xs text-txt-tertiary">{formatCurrency(r.patrocinios_valor_marcado)} marcados</p>
         </Card>
         <Card padding="md">
           <p className="text-xs text-txt-tertiary uppercase">No caixa</p>

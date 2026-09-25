@@ -52,6 +52,7 @@ import {
   EmptyState,
 } from "@/components/ui";
 import { ParticipantesGrid } from "@/components/eventos/ParticipantesGrid";
+import { BaileAbas } from "@/components/eventos/BaileAbas";
 import { FaixasPanel } from "@/components/eventos/FaixasPanel";
 
 /* ─── Constants ──────────────────────────────────────────────── */
@@ -642,6 +643,11 @@ export default function EventoDetailPage() {
               <h1 className="text-2xl sm:text-3xl font-display font-bold text-txt-primary">
                 {evento.titulo}
               </h1>
+              {evento.tipo === "baile" && (
+                <div className="mt-4">
+                  <BaileAbas eventoId={String(eventoId)} atual="evento" />
+                </div>
+              )}
               {evento.descricao && (
                 <p className="mt-2 text-sm text-txt-secondary font-body max-w-2xl">
                   {evento.descricao}
@@ -911,16 +917,6 @@ export default function EventoDetailPage() {
           >
             Convidado avulso
           </Button>
-          {evento?.tipo === "baile" && (
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<Ticket />}
-              onClick={() => router.push(`/eventos/${eventoId}/baile`)}
-            >
-              Planilha do baile
-            </Button>
-          )}
           <Button
             size="sm"
             variant="secondary"

@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Upload } from "lucide-react";
+import { useParams } from "next/navigation";
+import { Upload } from "lucide-react";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { Button, Card } from "@/components/ui";
+import { BaileAbas } from "@/components/eventos/BaileAbas";
 
 type Participante = {
   id: number;
@@ -81,7 +82,6 @@ const ACERTO = [
 
 export default function BailePlanilhaPage() {
   const params = useParams();
-  const router = useRouter();
   const eventoId = String(params.id);
   const [visao, setVisao] = useState<Visao | null>(null);
   const [destino, setDestino] = useState<Record<number, string>>({});
@@ -173,9 +173,7 @@ export default function BailePlanilhaPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" variant="secondary" icon={<ArrowLeft />} onClick={() => router.push(`/eventos/${eventoId}`)}>
-          Evento
-        </Button>
+        <BaileAbas eventoId={eventoId} atual="cartoes" />
         <div className="flex-1">
           <h1 className="text-2xl font-display font-bold text-txt-primary uppercase">{visao.titulo}</h1>
           <p className="text-sm text-txt-tertiary">

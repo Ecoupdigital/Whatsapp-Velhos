@@ -12,7 +12,6 @@ import {
   Trophy,
   BarChart3,
   Ticket,
-  Award,
   Megaphone,
   MessageCircle,
   Settings,
@@ -53,7 +52,6 @@ const navSections: NavSection[] = [
       { label: "Jogos", href: "/jogos", icon: Trophy },
       { label: "Estatisticas", href: "/estatisticas", icon: BarChart3 },
       { label: "Cartoes de Baile", href: "/cartoes", icon: Ticket },
-      { label: "Patrocinios", href: "/patrocinios", icon: Award },
     ],
   },
   {
