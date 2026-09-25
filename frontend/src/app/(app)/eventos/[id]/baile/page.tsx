@@ -32,6 +32,12 @@ type Patrocinio = {
   valor_vinculado: number;
 };
 
+type Vinculo = {
+  participante_id: number | null;
+  patrocinio_id: number | null;
+  valor: number;
+};
+
 type Lancamento = {
   id: number;
   data: string;
@@ -40,6 +46,8 @@ type Lancamento = {
   categoria: string;
   participante_id: number | null;
   patrocinio_id: number | null;
+  vinculos: Vinculo[];
+  restante: number;
 };
 
 type Visao = {
@@ -131,15 +139,26 @@ export default function BailePlanilhaPage() {
     }
   };
 
-  const desvincular = async (lancamentoId: number) => {
+  const desvincular = async (lancamentoId: number, vinculo?: Vinculo) => {
     try {
       const data = await api.post<Visao>(`/eventos/${eventoId}/baile/desvincular`, {
         transacao_id: lancamentoId,
+        participante_id: vinculo?.participante_id ?? undefined,
+        patrocinio_id: vinculo?.patrocinio_id ?? undefined,
       });
       setVisao(data);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao desvincular");
     }
+  };
+
+  const nomeVinculo = (v: Vinculo) => {
+    if (!visao) return "";
+    if (v.participante_id) {
+      return visao.participantes.find((p) => p.id === v.participante_id)?.nome || "atleta";
+    }
+    const pat = visao.patrocinios.find((p) => p.id === v.patrocinio_id);
+    return pat ? `${pat.nome_patrocinador} (${pat.nome_jogador})` : "patrocínio";
   };
 
   if (!visao) {
@@ -287,32 +306,30 @@ export default function BailePlanilhaPage() {
 
         <Card padding="md" className="overflow-x-auto">
           <h2 className="text-sm font-display uppercase text-txt-primary mb-3">Financeiro para vincular</h2>
-          <p className="text-xs text-txt-tertiary mb-2">Vincular não cria dinheiro novo. Só aponta o lançamento que já existe.</p>
+          <p className="text-xs text-txt-tertiary mb-2">Um lançamento de R$ 120 pode cobrir dois patrocínios de R$ 60. Vincular não cria dinheiro novo.</p>
           <div className="space-y-2">
             {visao.lancamentos.map((t) => {
-              const ligado = t.participante_id
-                ? visao.participantes.find((p) => p.id === t.participante_id)?.nome
-                : t.patrocinio_id
-                  ? visao.patrocinios.find((p) => p.id === t.patrocinio_id)?.nome_patrocinador
-                  : null;
+              const ligados = t.vinculos || [];
+              const sobra = t.restante ?? (ligados.length ? 0 : t.valor);
               return (
                 <div key={t.id} className="flex flex-wrap items-center gap-2 text-xs border-b border-border-subtle pb-2">
                   <span className="font-mono text-txt-tertiary">{t.data}</span>
                   <span className="font-mono text-emerald-400">{formatCurrency(t.valor)}</span>
                   <span className="text-txt-primary flex-1 min-w-[140px]">{t.descricao}</span>
-                  {ligado ? (
-                    <>
-                      <span className="text-txt-secondary">{ligado}</span>
-                      <button className="text-txt-tertiary hover:text-red-400" onClick={() => desvincular(t.id)}>soltar</button>
-                    </>
-                  ) : (
+                  {ligados.map((v, i) => (
+                    <span key={`${v.patrocinio_id}-${v.participante_id}-${i}`} className="inline-flex items-center gap-1 text-txt-secondary">
+                      {nomeVinculo(v)} {formatCurrency(v.valor)}
+                      <button className="text-txt-tertiary hover:text-red-400" onClick={() => desvincular(t.id, v)}>soltar</button>
+                    </span>
+                  ))}
+                  {sobra > 0.009 && (
                     <>
                       <select
                         className="h-8 rounded bg-surface-tertiary text-txt-primary max-w-[180px]"
                         value={destino[t.id] || ""}
                         onChange={(e) => setDestino((d) => ({ ...d, [t.id]: e.target.value }))}
                       >
-                        <option value="">vincular a...</option>
+                        <option value="">{ligados.length ? `ainda ${formatCurrency(sobra)}` : "vincular a..."}</option>
                         <optgroup label="Atletas">
                           {visao.participantes.map((p) => (
                             <option key={p.id} value={`p:${p.id}`}>{p.nome}</option>
@@ -320,7 +337,7 @@ export default function BailePlanilhaPage() {
                         </optgroup>
                         <optgroup label="Patrocínios">
                           {visao.patrocinios.map((p) => (
-                            <option key={p.id} value={`s:${p.id}`}>{p.nome_patrocinador}</option>
+                            <option key={p.id} value={`s:${p.id}`}>{p.nome_jogador}: {p.nome_patrocinador}</option>
                           ))}
                         </optgroup>
                       </select>

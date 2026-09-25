@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from auth import get_current_user
 from database import get_db
 from models import (
+    BaileVinculo,
     Evento,
     EventoParticipante,
     EventoPatrocinio,
@@ -65,14 +66,74 @@ def _nome(p: EventoParticipante) -> str:
 
 
 def _sincronizar_caixa(db: Session, p: EventoParticipante, evento: Evento):
-    total = (
-        db.query(Transacao)
-        .filter(Transacao.evento_participante_id == p.id, Transacao.tipo == "entrada")
+    partes = (
+        db.query(BaileVinculo)
+        .filter(BaileVinculo.participante_id == p.id)
         .all()
     )
-    p.valor_pago = float(sum(t.valor or 0 for t in total))
+    if partes:
+        total = sum(v.valor or 0 for v in partes)
+    else:
+        diretos = (
+            db.query(Transacao)
+            .filter(Transacao.evento_participante_id == p.id, Transacao.tipo == "entrada")
+            .all()
+        )
+        total = sum(t.valor or 0 for t in diretos)
+    p.valor_pago = float(total)
     _recalcular_valor_esperado(p, evento)
     p.pago = 1 if p.valor and p.valor_pago >= p.valor - 0.009 else 0
+
+
+def _vinculos_da(db: Session, transacao_id: int) -> list[BaileVinculo]:
+    return db.query(BaileVinculo).filter(BaileVinculo.transacao_id == transacao_id).all()
+
+
+def _materializar_legado(db: Session, t: Transacao, evento_id: int) -> list[BaileVinculo]:
+    """O vínculo antigo guardava o lançamento inteiro num patrocínio só.
+
+    Se o patrocínio vale menos que o lançamento (R$ 60 dentro de um PIX de
+    R$ 120), fica só a parte dele. O resto continua livre para o segundo.
+    """
+    atuais = _vinculos_da(db, t.id)
+    if atuais:
+        return atuais
+    if t.patrocinio_id:
+        pat = db.query(EventoPatrocinio).filter(EventoPatrocinio.id == t.patrocinio_id).first()
+        teto = float(pat.valor or 0) if pat else float(t.valor or 0)
+        valor = min(float(t.valor or 0), teto) if teto else float(t.valor or 0)
+        db.add(BaileVinculo(
+            transacao_id=t.id,
+            evento_id=evento_id,
+            patrocinio_id=t.patrocinio_id,
+            valor=valor,
+        ))
+        t.patrocinio_id = None
+        db.flush()
+    elif t.evento_participante_id:
+        db.add(BaileVinculo(
+            transacao_id=t.id,
+            evento_id=evento_id,
+            participante_id=t.evento_participante_id,
+            valor=float(t.valor or 0),
+        ))
+        t.evento_participante_id = None
+        db.flush()
+    return _vinculos_da(db, t.id)
+
+
+def _partes_lancamento(db: Session, t: Transacao) -> list[tuple[int | None, int | None, float]]:
+    vinculos = _vinculos_da(db, t.id)
+    if vinculos:
+        return [(v.participante_id, v.patrocinio_id, float(v.valor or 0)) for v in vinculos]
+    if t.patrocinio_id:
+        pat = db.query(EventoPatrocinio).filter(EventoPatrocinio.id == t.patrocinio_id).first()
+        teto = float(pat.valor or 0) if pat else float(t.valor or 0)
+        valor = min(float(t.valor or 0), teto) if teto else float(t.valor or 0)
+        return [(None, t.patrocinio_id, valor)]
+    if t.evento_participante_id:
+        return [(t.evento_participante_id, None, float(t.valor or 0))]
+    return []
 
 
 def _visao(db: Session, evento: Evento) -> dict:
@@ -104,11 +165,15 @@ def _visao(db: Session, evento: Evento) -> dict:
     )
     por_part = {}
     por_pat = {}
+    partes_por_tx = {}
     for t in lancamentos:
-        if t.evento_participante_id:
-            por_part[t.evento_participante_id] = por_part.get(t.evento_participante_id, 0) + (t.valor or 0)
-        if t.patrocinio_id:
-            por_pat[t.patrocinio_id] = por_pat.get(t.patrocinio_id, 0) + (t.valor or 0)
+        partes = _partes_lancamento(db, t)
+        partes_por_tx[t.id] = partes
+        for participante_id, patrocinio_id, valor in partes:
+            if participante_id:
+                por_part[participante_id] = por_part.get(participante_id, 0) + valor
+            if patrocinio_id:
+                por_pat[patrocinio_id] = por_pat.get(patrocinio_id, 0) + valor
 
     preco = evento.valor_cartao or 0
     lucro_preco = evento.valor_lucro or 0
@@ -184,6 +249,15 @@ def _visao(db: Session, evento: Evento) -> dict:
                 "categoria": t.categoria,
                 "participante_id": t.evento_participante_id,
                 "patrocinio_id": t.patrocinio_id,
+                "vinculos": [
+                    {
+                        "participante_id": pid,
+                        "patrocinio_id": pat_id,
+                        "valor": valor,
+                    }
+                    for pid, pat_id, valor in partes_por_tx.get(t.id, [])
+                ],
+                "restante": max(0.0, float(t.valor or 0) - sum(v for _, _, v in partes_por_tx.get(t.id, []))),
             }
             for t in lancamentos
         ],
@@ -251,7 +325,11 @@ def atualizar_planilha(
 
 @router.post("/{evento_id}/baile/vincular")
 def vincular(evento_id: int, data: VincularIn, db: Session = Depends(get_db)):
-    """Amarra um lancamento que JA existe. Nao cria entrada nova no caixa."""
+    """Amarra um pedaço de um lançamento que já existe. Não cria entrada nova.
+
+    Um PIX de R$ 120 pode ir para dois patrocínios de R$ 60. Cada vínculo
+    leva só o valor daquele patrocínio. O que sobra fica livre para o próximo.
+    """
     evento = _evento(db, evento_id)
     if bool(data.participante_id) == bool(data.patrocinio_id):
         raise HTTPException(status_code=400, detail="Vincule a um atleta ou a um patrocinio")
@@ -260,9 +338,20 @@ def vincular(evento_id: int, data: VincularIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Lancamento nao encontrado")
     if t.tipo != "entrada":
         raise HTTPException(status_code=400, detail="So da para vincular entrada")
-    anterior = None
-    if t.evento_participante_id:
-        anterior = db.query(EventoParticipante).filter(EventoParticipante.id == t.evento_participante_id).first()
+
+    atuais = _materializar_legado(db, t, evento_id)
+    if data.patrocinio_id and any(v.patrocinio_id == data.patrocinio_id for v in atuais):
+        db.commit()
+        return _visao(db, evento)
+    if data.participante_id and any(v.participante_id == data.participante_id for v in atuais):
+        db.commit()
+        return _visao(db, evento)
+
+    restante = float(t.valor or 0) - sum(v.valor or 0 for v in atuais)
+    if restante <= 0.009:
+        raise HTTPException(status_code=400, detail="Esse lancamento ja foi todo usado")
+
+    afetados = []
     if data.participante_id:
         p = (
             db.query(EventoParticipante)
@@ -274,10 +363,18 @@ def vincular(evento_id: int, data: VincularIn, db: Session = Depends(get_db)):
         )
         if not p:
             raise HTTPException(status_code=404, detail="Participante nao encontrado")
-        t.evento_id = evento_id
-        t.evento_participante_id = p.id
-        t.patrocinio_id = None
-        _sincronizar_caixa(db, p, evento)
+        p.evento = evento
+        _recalcular_valor_esperado(p, evento)
+        ja = sum(v.valor or 0 for v in atuais if v.participante_id == p.id)
+        falta = max(0.0, float(p.valor or 0) - ja)
+        valor = min(restante, falta) if falta else restante
+        db.add(BaileVinculo(
+            transacao_id=t.id,
+            evento_id=evento_id,
+            participante_id=p.id,
+            valor=valor,
+        ))
+        afetados.append(p)
     else:
         pat = (
             db.query(EventoPatrocinio)
@@ -286,11 +383,21 @@ def vincular(evento_id: int, data: VincularIn, db: Session = Depends(get_db)):
         )
         if not pat:
             raise HTTPException(status_code=404, detail="Patrocinio nao encontrado")
-        t.evento_id = evento_id
-        t.patrocinio_id = pat.id
-        t.evento_participante_id = None
-    if anterior and anterior.id != t.evento_participante_id:
-        _sincronizar_caixa(db, anterior, evento)
+        ja = sum(v.valor or 0 for v in atuais if v.patrocinio_id == pat.id)
+        falta = max(0.0, float(pat.valor or 0) - ja)
+        if falta <= 0.009:
+            raise HTTPException(status_code=400, detail="Esse patrocinio ja esta coberto")
+        valor = min(restante, falta)
+        db.add(BaileVinculo(
+            transacao_id=t.id,
+            evento_id=evento_id,
+            patrocinio_id=pat.id,
+            valor=valor,
+        ))
+    t.evento_id = evento_id
+    db.flush()
+    for p in afetados:
+        _sincronizar_caixa(db, p, evento)
     db.commit()
     return _visao(db, evento)
 
@@ -301,13 +408,20 @@ def desvincular(evento_id: int, data: VincularIn, db: Session = Depends(get_db))
     t = db.query(Transacao).filter(Transacao.id == data.transacao_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Lancamento nao encontrado")
-    anterior_id = t.evento_participante_id
+    _materializar_legado(db, t, evento_id)
+    consulta = db.query(BaileVinculo).filter(BaileVinculo.transacao_id == t.id)
+    if data.patrocinio_id:
+        consulta = consulta.filter(BaileVinculo.patrocinio_id == data.patrocinio_id)
+    elif data.participante_id:
+        consulta = consulta.filter(BaileVinculo.participante_id == data.participante_id)
+    participantes_ids = {v.participante_id for v in consulta.all() if v.participante_id}
+    consulta.delete(synchronize_session=False)
     t.evento_participante_id = None
     t.patrocinio_id = None
-    if t.evento_id == evento_id:
+    if not _vinculos_da(db, t.id) and t.evento_id == evento_id:
         t.evento_id = None
-    if anterior_id:
-        p = db.query(EventoParticipante).filter(EventoParticipante.id == anterior_id).first()
+    for pid in participantes_ids:
+        p = db.query(EventoParticipante).filter(EventoParticipante.id == pid).first()
         if p:
             _sincronizar_caixa(db, p, evento)
     db.commit()

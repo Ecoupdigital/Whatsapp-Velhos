@@ -342,6 +342,29 @@ class EventoPatrocinio(Base):
     jogador = relationship("Jogador")
 
 
+class BaileVinculo(Base):
+    """Pedaço de um lançamento já existente, ligado a um patrocínio ou a um atleta.
+
+    Um PIX de R$ 120 pode cobrir dois patrocínios de R$ 60. O lançamento
+    continua único no caixa.
+    """
+    __tablename__ = "baile_vinculos"
+    __table_args__ = (
+        Index("ix_baile_vinculo_tx", "transacao_id"),
+        Index("ix_baile_vinculo_pat", "patrocinio_id"),
+        Index("ix_baile_vinculo_part", "participante_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    transacao_id = Column(Integer, ForeignKey("transacoes.id", ondelete="CASCADE"), nullable=False)
+    evento_id = Column(Integer, ForeignKey("eventos.id", ondelete="CASCADE"), nullable=False)
+    participante_id = Column(Integer, ForeignKey("evento_participantes.id", ondelete="CASCADE"))
+    patrocinio_id = Column(Integer, ForeignKey("evento_patrocinios.id", ondelete="CASCADE"))
+    valor = Column(Float, nullable=False, default=0)
+
+    transacao = relationship("Transacao")
+
+
 class EventoParticipanteItem(Base):
     __tablename__ = "evento_participante_item"
     __table_args__ = (

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
-from models import Evento, EventoParticipante, Jogador, Transacao
+from models import BaileVinculo, Evento, EventoParticipante, EventoPatrocinio, Jogador, Transacao
 
 
 def _planilha(path: Path):
@@ -118,7 +118,9 @@ def test_vincular_nao_duplica_o_lancamento(client, TestingSession):
     assert db.query(Transacao).count() == 1
     gravado = db.query(Transacao).one()
     assert gravado.valor == 900
-    assert gravado.evento_participante_id == pid
+    vinculo = db.query(BaileVinculo).one()
+    assert vinculo.participante_id == pid
+    assert vinculo.valor == 900
     db.close()
 
     de_novo = client.post(
@@ -129,3 +131,85 @@ def test_vincular_nao_duplica_o_lancamento(client, TestingSession):
     db = TestingSession()
     assert db.query(Transacao).count() == 1
     db.close()
+
+
+def test_um_pix_de_120_cobre_dois_patrocinios(client, TestingSession):
+    db = TestingSession()
+    ev = Evento(tipo="baile", titulo="Baile", status="em_andamento", valor_cartao=180, valor_lucro=90)
+    db.add(ev)
+    db.commit()
+    a = EventoPatrocinio(evento_id=ev.id, nome_jogador="Jonathan", nome_patrocinador="Don Vicente", valor=60, pago="sim")
+    b = EventoPatrocinio(evento_id=ev.id, nome_jogador="Jonathan", nome_patrocinador="Ecoinset", valor=60, pago="sim")
+    db.add_all([a, b])
+    tx = Transacao(
+        tipo="entrada", categoria="patrocinio", descricao="2 Patrocinios Baile",
+        valor=120, data="2026-09-17",
+    )
+    db.add(tx)
+    db.commit()
+    evento_id, a_id, b_id, tx_id = ev.id, a.id, b.id, tx.id
+    db.close()
+
+    r1 = client.post(
+        f"/api/eventos/{evento_id}/baile/vincular",
+        json={"transacao_id": tx_id, "patrocinio_id": a_id},
+    )
+    assert r1.status_code == 200, r1.text
+    body = r1.json()
+    por_id = {p["id"]: p for p in body["patrocinios"]}
+    assert por_id[a_id]["valor_vinculado"] == 60
+    assert por_id[b_id]["valor_vinculado"] == 0
+    lanc = body["lancamentos"][0]
+    assert lanc["restante"] == 60
+
+    r2 = client.post(
+        f"/api/eventos/{evento_id}/baile/vincular",
+        json={"transacao_id": tx_id, "patrocinio_id": b_id},
+    )
+    assert r2.status_code == 200, r2.text
+    body = r2.json()
+    por_id = {p["id"]: p for p in body["patrocinios"]}
+    assert por_id[a_id]["valor_vinculado"] == 60
+    assert por_id[b_id]["valor_vinculado"] == 60
+    assert body["resumo"]["caixa_patrocinio"] == 120
+    assert body["lancamentos"][0]["restante"] == 0
+
+    db = TestingSession()
+    gravado = db.query(Transacao).one()
+    assert gravado.valor == 120
+    assert db.query(Transacao).count() == 1
+    db.close()
+
+
+def test_vinculo_antigo_de_120_deixa_o_segundo_livre(client, TestingSession):
+    db = TestingSession()
+    ev = Evento(tipo="baile", titulo="Baile", status="em_andamento", valor_cartao=180, valor_lucro=90)
+    db.add(ev)
+    db.commit()
+    a = EventoPatrocinio(evento_id=ev.id, nome_jogador="Caue", nome_patrocinador="Glam", valor=60, pago="sim")
+    b = EventoPatrocinio(evento_id=ev.id, nome_jogador="Caue", nome_patrocinador="Pioner", valor=60, pago="sim")
+    db.add_all([a, b])
+    db.flush()
+    tx = Transacao(
+        tipo="entrada", categoria="patrocinio", descricao="Caue 2 patrocinios",
+        valor=120, data="2026-09-19", evento_id=ev.id, patrocinio_id=a.id,
+    )
+    db.add(tx)
+    db.commit()
+    evento_id, a_id, b_id, tx_id = ev.id, a.id, b.id, tx.id
+    db.close()
+
+    visao = client.get(f"/api/eventos/{evento_id}/baile").json()
+    por_id = {p["id"]: p for p in visao["patrocinios"]}
+    assert por_id[a_id]["valor_vinculado"] == 60
+    assert visao["lancamentos"][0]["restante"] == 60
+
+    r = client.post(
+        f"/api/eventos/{evento_id}/baile/vincular",
+        json={"transacao_id": tx_id, "patrocinio_id": b_id},
+    )
+    assert r.status_code == 200, r.text
+    por_id = {p["id"]: p for p in r.json()["patrocinios"]}
+    assert por_id[a_id]["valor_vinculado"] == 60
+    assert por_id[b_id]["valor_vinculado"] == 60
+    assert r.json()["resumo"]["caixa_patrocinio"] == 120
