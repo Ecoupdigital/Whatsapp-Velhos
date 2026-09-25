@@ -13,6 +13,9 @@ type Participante = {
   nome: string;
   numero_inicio: number | null;
   numero_fim: number | null;
+  faixas: { inicio: number; fim: number; quantidade: number }[];
+  conhecidos: number;
+  a_identificar: number;
   qtd_venda: number;
   qtd_lucro: number;
   acerto: string;
@@ -222,7 +225,7 @@ export default function BailePlanilhaPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase text-txt-tertiary border-b border-border-subtle">
-              {["Atleta", "Números", "Vendidos", "Lucro", "Devido", "No caixa", "Planilha", "Obs"].map((h) => (
+              {["Atleta", "Números conhecidos", "Vendidos", "A identificar", "Lucro", "Devido", "No caixa", "Planilha", "Obs"].map((h) => (
                 <th key={h} className="px-3 py-2 font-medium">{h}</th>
               ))}
             </tr>
@@ -231,8 +234,34 @@ export default function BailePlanilhaPage() {
             {visao.participantes.map((p) => (
               <tr key={p.id} className="border-b border-border-subtle">
                 <td className="px-3 py-2 text-txt-primary">{p.nome}</td>
-                <td className="px-3 py-2 font-mono text-txt-secondary">
-                  {p.numero_inicio != null ? `${p.numero_inicio} a ${p.numero_fim}` : "sem número"}
+                <td className="px-3 py-2 font-mono text-txt-secondary text-xs">
+                  {(p.faixas || []).length
+                    ? p.faixas.map((f) => (f.inicio === f.fim ? String(f.inicio) : `${f.inicio} a ${f.fim}`)).join(", ")
+                    : "sem número"}
+                  <form
+                    className="mt-1 flex gap-1"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget;
+                      const bruto = String(new FormData(form).get("n") || "").trim();
+                      const pedacos = bruto.split(/[^\d]+/).filter(Boolean).map(Number);
+                      if (!pedacos.length) return;
+                      const inicio = pedacos[0];
+                      const fim = pedacos.length > 1 ? pedacos[1] : pedacos[0];
+                      try {
+                        await api.post(`/eventos/${eventoId}/participantes/${p.id}/faixas`, {
+                          numero_inicio: inicio,
+                          numero_fim: fim,
+                        });
+                        form.reset();
+                        await carregar();
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Não salvei o número");
+                      }
+                    }}
+                  >
+                    <input name="n" placeholder="ex. 88 ou 200 a 203" className="w-28 h-7 px-1 rounded bg-surface-tertiary text-txt-primary" />
+                  </form>
                 </td>
                 <td className="px-3 py-2">
                   <input
@@ -247,6 +276,9 @@ export default function BailePlanilhaPage() {
                       if (!Number.isNaN(n) && n !== p.qtd_venda) salvar(p, "qtd_venda", n);
                     }}
                   />
+                </td>
+                <td className="px-3 py-2 text-center font-mono">
+                  <span className={p.a_identificar > 0 ? "text-amber-400" : "text-txt-tertiary"}>{p.a_identificar || 0}</span>
                 </td>
                 <td className="px-3 py-2">
                   <input

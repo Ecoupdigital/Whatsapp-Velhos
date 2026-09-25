@@ -8,13 +8,14 @@ interface EditableCellProps {
   /** Salva o novo valor. Resolve = sucesso; rejeita = erro -> a celula reverte. */
   onCommit: (next: number) => Promise<void>;
   min?: number;
+  step?: number;
   disabled?: boolean;
   className?: string;
   align?: "left" | "right" | "center";
 }
 
 export function EditableCell({
-  value, onCommit, min = 0, disabled = false, className, align = "center",
+  value, onCommit, min = 0, step = 1, disabled = false, className, align = "center",
 }: EditableCellProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
@@ -25,7 +26,7 @@ export function EditableCell({
   useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
 
   const commit = async () => {
-    const parsed = parseInt(draft, 10);
+    const parsed = step < 1 ? parseFloat(draft) : parseInt(draft, 10);
     const next = isNaN(parsed) ? value : Math.max(min, parsed);
     setEditing(false);
     if (next === value) { setDraft(String(value)); return; }
@@ -42,7 +43,7 @@ export function EditableCell({
   if (editing) {
     return (
       <input
-        ref={inputRef} type="number" min={min} value={draft} disabled={saving}
+        ref={inputRef} type="number" min={min} step={step} value={draft} disabled={saving}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {

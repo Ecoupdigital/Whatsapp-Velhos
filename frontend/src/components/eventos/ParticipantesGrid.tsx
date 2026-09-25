@@ -15,6 +15,7 @@ interface ParticipantesGridProps {
   onPay: (p: ParticipanteOut) => void;
   onRemove: (p: ParticipanteOut) => void;
   commitCartaoCampo: (p: ParticipanteOut, campo: "qtd_vendidos" | "qtd_devolvidos" | "qtd_pagou_custo", valor: number) => Promise<void>;
+  commitPlanilha?: (p: ParticipanteOut, campo: "qtd_venda" | "qtd_lucro", valor: number) => Promise<void>;
   commitItemCampo: (p: ParticipanteOut, tipo: string, valor: number) => Promise<void>;
   nomeParticipante: (p: ParticipanteOut) => string;
   statusDerivado: (p: ParticipanteOut) => "pago" | "parcial" | "pendente";
@@ -23,8 +24,19 @@ interface ParticipantesGridProps {
 
 export function ParticipantesGrid({
   participantes, evento, expandedId, onToggleExpand, onPay, onRemove,
-  commitCartaoCampo, commitItemCampo, nomeParticipante, statusDerivado, renderExpanded,
+  commitCartaoCampo, commitPlanilha, commitItemCampo, nomeParticipante, statusDerivado, renderExpanded,
 }: ParticipantesGridProps) {
+  const baile = evento.tipo === "baile";
+  const vendaDe = (p: ParticipanteOut) => (p.qtd_venda ?? p.qtd_vendidos ?? 0);
+  const conhecidosDe = (p: ParticipanteOut) =>
+    p.faixas?.reduce((s, f) => s + (f.quantidade || 0), 0) || p.qtd_cartoes_recebidos || 0;
+  const identificarDe = (p: ParticipanteOut) => Math.max(0, vendaDe(p) - conhecidosDe(p));
+  const numerosDe = (p: ParticipanteOut) => {
+    const nums = (p.faixas || [])
+      .filter((f) => f.numero_inicio != null)
+      .map((f) => (f.numero_inicio === f.numero_fim ? String(f.numero_inicio) : `${f.numero_inicio} a ${f.numero_fim}`));
+    return nums.length ? nums.join(", ") : "sem número";
+  };
   const tipos = evento.tipos_item || [];
   const primary = tipos[0];                       // cru (editavel)
   const complemento = tipos.length >= 2 ? tipos[1] : undefined;  // assado (= vendidos - cru)
@@ -39,7 +51,7 @@ export function ParticipantesGrid({
     : s === "parcial" ? "text-blue-400 bg-blue-500/15"
     : "text-yellow-400 bg-yellow-500/15";
 
-  const colCount = 5 + (primary ? 1 : 0) + (complemento ? 1 : 0) + 3;
+  const colCount = baile ? 9 : 5 + (primary ? 1 : 0) + (complemento ? 1 : 0) + 3;
 
   return (
     <div className="overflow-x-auto">
@@ -47,14 +59,26 @@ export function ParticipantesGrid({
         <thead>
           <tr className="text-txt-tertiary font-body text-[11px] uppercase tracking-wider border-b border-border-subtle">
             <th className="py-2 pr-3 text-left font-medium">Participante</th>
-            <th className="py-2 px-2 text-center font-medium">Receb.</th>
-            <th className="py-2 px-2 text-center font-medium">Vend.</th>
-            <th className="py-2 px-2 text-center font-medium">Devol.</th>
-            <th className="py-2 px-2 text-center font-medium">Custo</th>
-            {primary && (
+            {baile ? (
+              <>
+                <th className="py-2 px-2 text-left font-medium">Números</th>
+                <th className="py-2 px-2 text-center font-medium">Conhecidos</th>
+                <th className="py-2 px-2 text-center font-medium">Vendidos</th>
+                <th className="py-2 px-2 text-center font-medium">A identificar</th>
+                <th className="py-2 px-2 text-center font-medium">Lucro</th>
+              </>
+            ) : (
+              <>
+                <th className="py-2 px-2 text-center font-medium">Receb.</th>
+                <th className="py-2 px-2 text-center font-medium">Vend.</th>
+                <th className="py-2 px-2 text-center font-medium">Devol.</th>
+                <th className="py-2 px-2 text-center font-medium">Custo</th>
+              </>
+            )}
+            {!baile && primary && (
               <th className="py-2 px-2 text-center font-medium capitalize text-emerald-400/80">{primary}</th>
             )}
-            {complemento && (
+            {!baile && complemento && (
               <th className="py-2 px-2 text-center font-medium capitalize text-orange-400/80">{complemento} (auto)</th>
             )}
             <th className="py-2 px-2 text-right font-medium">Valor</th>
@@ -76,16 +100,44 @@ export function ParticipantesGrid({
                       {nomeParticipante(p)}
                     </button>
                   </td>
-                  <td className="py-2 px-2 text-center font-mono text-txt-secondary tabular-nums">
-                    <span className="inline-flex items-center gap-1"><Ticket size={11} className="text-blue-400" />{p.qtd_cartoes_recebidos}</span>
-                  </td>
-                  <td className="py-2 px-2 text-center"><EditableCell value={p.qtd_vendidos} onCommit={(v) => commitCartaoCampo(p, "qtd_vendidos", v)} /></td>
-                  <td className="py-2 px-2 text-center"><EditableCell value={p.qtd_devolvidos} onCommit={(v) => commitCartaoCampo(p, "qtd_devolvidos", v)} /></td>
-                  <td className="py-2 px-2 text-center"><EditableCell value={p.qtd_pagou_custo} onCommit={(v) => commitCartaoCampo(p, "qtd_pagou_custo", v)} /></td>
-                  {primary && (
+                  {baile ? (
+                    <>
+                      <td className="py-2 px-2 text-left font-mono text-txt-secondary text-xs max-w-[180px]">{numerosDe(p)}</td>
+                      <td className="py-2 px-2 text-center font-mono text-txt-secondary tabular-nums">{conhecidosDe(p)}</td>
+                      <td className="py-2 px-2 text-center">
+                        <EditableCell
+                          value={vendaDe(p)}
+                          step={0.5}
+                          onCommit={(v) => (commitPlanilha ? commitPlanilha(p, "qtd_venda", v) : commitCartaoCampo(p, "qtd_vendidos", v))}
+                        />
+                      </td>
+                      <td className="py-2 px-2 text-center font-mono tabular-nums">
+                        <span className={identificarDe(p) > 0 ? "text-amber-400" : "text-txt-tertiary"} title="Vendidos cujo número ainda não foi lançado. Abre o nome para registrar.">
+                          {identificarDe(p)}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        <EditableCell
+                          value={p.qtd_lucro || 0}
+                          step={0.5}
+                          onCommit={(v) => (commitPlanilha ? commitPlanilha(p, "qtd_lucro", v) : Promise.resolve())}
+                        />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="py-2 px-2 text-center font-mono text-txt-secondary tabular-nums">
+                        <span className="inline-flex items-center gap-1"><Ticket size={11} className="text-blue-400" />{p.qtd_cartoes_recebidos}</span>
+                      </td>
+                      <td className="py-2 px-2 text-center"><EditableCell value={p.qtd_vendidos} onCommit={(v) => commitCartaoCampo(p, "qtd_vendidos", v)} /></td>
+                      <td className="py-2 px-2 text-center"><EditableCell value={p.qtd_devolvidos} onCommit={(v) => commitCartaoCampo(p, "qtd_devolvidos", v)} /></td>
+                      <td className="py-2 px-2 text-center"><EditableCell value={p.qtd_pagou_custo} onCommit={(v) => commitCartaoCampo(p, "qtd_pagou_custo", v)} /></td>
+                    </>
+                  )}
+                  {!baile && primary && (
                     <td className="py-2 px-2 text-center"><EditableCell value={cruDe(p)} onCommit={(v) => commitItemCampo(p, primary, v)} /></td>
                   )}
-                  {complemento && (
+                  {!baile && complemento && (
                     <td className="py-2 px-2 text-center font-mono text-orange-400/90 tabular-nums" title="Calculado: vendidos - cru">{assadoDe(p)}</td>
                   )}
                   <td className="py-2 px-2 text-right font-mono text-txt-primary tabular-nums">{formatCurrency(p.valor_pago || 0)}/{formatCurrency(p.valor || 0)}</td>

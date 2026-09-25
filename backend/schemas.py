@@ -413,6 +413,8 @@ class ParticipanteOut(BaseModel):
     numero_inicio: Optional[int] = None
     numero_fim: Optional[int] = None
     qtd_vendidos: int = 0
+    qtd_venda: Optional[float] = None
+    qtd_lucro: float = 0
     qtd_devolvidos: int = 0
     qtd_pagou_custo: int = 0
     observacoes: Optional[str]

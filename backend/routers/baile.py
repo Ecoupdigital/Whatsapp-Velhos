@@ -188,13 +188,21 @@ def _visao(db: Session, evento: Evento) -> dict:
         qtd_lucro = float(p.qtd_lucro or 0)
         rc = venda * preco
         rl = qtd_lucro * lucro_preco
-        faixa = next((f for f in p.faixas if not f.sem_numero and f.numero_inicio is not None), None)
+        faixas_num = [
+            {"inicio": f.numero_inicio, "fim": f.numero_fim, "quantidade": f.quantidade or 0}
+            for f in p.faixas
+            if not f.sem_numero and f.numero_inicio is not None
+        ]
+        conhecidos = sum(f["quantidade"] for f in faixas_num)
         linhas.append({
             "id": p.id,
             "nome": _nome(p),
             "telefone": p.jogador.telefone if p.jogador else None,
-            "numero_inicio": faixa.numero_inicio if faixa else p.numero_inicio,
-            "numero_fim": faixa.numero_fim if faixa else p.numero_fim,
+            "numero_inicio": faixas_num[0]["inicio"] if faixas_num else p.numero_inicio,
+            "numero_fim": faixas_num[0]["fim"] if faixas_num else p.numero_fim,
+            "faixas": faixas_num,
+            "conhecidos": conhecidos,
+            "a_identificar": max(0.0, venda - conhecidos),
             "qtd_venda": venda,
             "qtd_lucro": qtd_lucro,
             "qtd_brindes": float(p.qtd_brindes or 0),

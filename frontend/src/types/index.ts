@@ -268,6 +268,8 @@ export interface ParticipanteOut {
   numero_inicio: number | null;
   numero_fim: number | null;
   qtd_vendidos: number;
+  qtd_venda?: number | null;
+  qtd_lucro?: number;
   qtd_devolvidos: number;
   qtd_pagou_custo: number;
   observacoes: string | null;

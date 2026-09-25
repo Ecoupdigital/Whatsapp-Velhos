@@ -444,6 +444,21 @@ export default function EventoDetailPage() {
     }
   }, [eventoId, fetchAll]);
 
+  const commitPlanilha = useCallback(
+    async (part: ParticipanteOut, campo: "qtd_venda" | "qtd_lucro", valor: number) => {
+      try {
+        await api.put(`/eventos/${eventoId}/baile/participantes/${part.id}`, { [campo]: valor });
+        await refetchParticipante(part.id);
+        const res = await api.get<EventoResumo>(`/eventos/${eventoId}/resumo`);
+        setResumo(res);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Erro ao salvar");
+        throw err;
+      }
+    },
+    [eventoId, refetchParticipante]
+  );
+
   const commitCartaoCampo = useCallback(
     async (
       part: ParticipanteOut,
@@ -592,7 +607,10 @@ export default function EventoDetailPage() {
   const statusStyle = statusBadgeStyles[evento.status] || statusBadgeStyles.planejado;
   const TipoIcon = tipoStyle.icon;
 
-  const pctMeta = resumo?.percentual_meta ?? 0;
+  const metaCartoesBaile = 180;
+  const pctMeta = evento?.tipo === "baile" && resumo
+    ? (resumo.cartoes_vendidos / metaCartoesBaile) * 100
+    : (resumo?.percentual_meta ?? 0);
   const pctMetaCapped = Math.min(100, pctMeta);
 
   return (
@@ -728,14 +746,16 @@ export default function EventoDetailPage() {
                   {pctMeta.toFixed(1)}%
                 </p>
                 <p className="text-xs text-txt-tertiary font-body mt-1">
-                  meta {formatCurrency(resumo.meta_arrecadacao)}
+                  {evento.tipo === "baile"
+                    ? `meta ${metaCartoesBaile} cartões vendidos`
+                    : `meta ${formatCurrency(resumo.meta_arrecadacao)}`}
                 </p>
               </div>
               <div className="p-2 rounded-lg bg-surface-tertiary text-blue-400">
                 <TrendingUp size={20} />
               </div>
             </div>
-            {resumo.meta_arrecadacao > 0 && (
+            {(evento.tipo === "baile" || resumo.meta_arrecadacao > 0) && (
               <div className="mt-3 h-1.5 bg-surface-tertiary rounded-full overflow-hidden">
                 <div
                   className="h-full bg-blue-500 rounded-full transition-all"
@@ -793,7 +813,7 @@ export default function EventoDetailPage() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
             <div>
-              <p className="text-xs text-txt-tertiary font-body">Emitidos</p>
+              <p className="text-xs text-txt-tertiary font-body">{evento.tipo === "baile" ? "Números conhecidos" : "Emitidos"}</p>
               <p className="text-xl font-bold font-mono text-txt-primary">{resumo.cartoes_emitidos}</p>
             </div>
             <div>
@@ -970,6 +990,7 @@ export default function EventoDetailPage() {
               onPay={openPayModal}
               onRemove={handleRemoverParticipante}
               commitCartaoCampo={commitCartaoCampo}
+              commitPlanilha={evento.tipo === "baile" ? commitPlanilha : undefined}
               commitItemCampo={commitItemCampo}
               nomeParticipante={nomeParticipante}
               statusDerivado={pStatusDerivado}
