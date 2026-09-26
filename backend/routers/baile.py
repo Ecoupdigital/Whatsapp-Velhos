@@ -23,7 +23,7 @@ from models import (
     EventoPatrocinio,
     Transacao,
 )
-from routers.eventos import _recalcular_valor_esperado, qtd_venda_efetiva
+from routers.eventos import _recalcular_valor_esperado, _recalcular_valor_pago, qtd_venda_efetiva
 from services.baile_planilha import PLANILHA_PADRAO, importar_arquivo
 
 router = APIRouter(
@@ -96,23 +96,8 @@ def _nome(p: EventoParticipante) -> str:
 
 
 def _sincronizar_caixa(db: Session, p: EventoParticipante, evento: Evento):
-    partes = (
-        db.query(BaileVinculo)
-        .filter(BaileVinculo.participante_id == p.id)
-        .all()
-    )
-    if partes:
-        total = sum(v.valor or 0 for v in partes)
-    else:
-        diretos = (
-            db.query(Transacao)
-            .filter(Transacao.evento_participante_id == p.id, Transacao.tipo == "entrada")
-            .all()
-        )
-        total = sum(t.valor or 0 for t in diretos)
-    p.valor_pago = float(total)
     _recalcular_valor_esperado(p, evento)
-    p.pago = 1 if p.valor and p.valor_pago >= p.valor - 0.009 else 0
+    _recalcular_valor_pago(db, p)
 
 
 def _vinculos_da(db: Session, transacao_id: int) -> list[BaileVinculo]:

@@ -11,7 +11,16 @@ from sqlalchemy import func
 from datetime import datetime
 
 from database import get_db
-from models import Evento, EventoParticipante, EventoParticipanteItem, Jogador, Transacao, EventoCartaoFaixa
+from models import (
+    BaileVinculo,
+    Evento,
+    EventoParticipante,
+    EventoParticipanteItem,
+    EventoPatrocinio,
+    Jogador,
+    Transacao,
+    EventoCartaoFaixa,
+)
 from schemas import (
     EventoCreate, EventoUpdate, EventoOut,
     ParticipanteUpdate, ParticipanteOut,
@@ -615,14 +624,59 @@ def _nome_participante(p: EventoParticipante) -> str:
 
 
 def _recalcular_valor_pago(db: Session, p: EventoParticipante):
-    """Soma todas transacoes do participante e ajusta valor_pago + pago."""
-    total = (
-        db.query(func.coalesce(func.sum(Transacao.valor), 0.0))
+    """Soma o que ainda está ligado a este participante, sem contar duas vezes."""
+    vinculos = db.query(BaileVinculo).filter(BaileVinculo.participante_id == p.id).all()
+    ja_na_soma = {v.transacao_id for v in vinculos}
+    total = sum(float(v.valor or 0) for v in vinculos)
+    diretas = (
+        db.query(Transacao)
         .filter(Transacao.evento_participante_id == p.id, Transacao.tipo == "entrada")
-        .scalar()
-    ) or 0.0
+        .all()
+    )
+    for t in diretas:
+        if t.id not in ja_na_soma:
+            total += float(t.valor or 0)
     p.valor_pago = float(total)
-    p.pago = 1 if p.valor and p.valor_pago >= p.valor else 0
+    p.pago = 1 if p.valor and p.valor_pago >= float(p.valor) - 0.009 else 0
+
+
+def desfazer_efeitos_transacao(db: Session, t: Transacao):
+    """Apaga o lançamento e tira o valor de quem estava vinculado.
+
+    Apagar pelo financeiro não pode deixar o participante com saldo pago fantasma.
+    """
+    participante_ids = set()
+    patrocinio_ids = set()
+    if t.evento_participante_id:
+        participante_ids.add(t.evento_participante_id)
+    if t.patrocinio_id:
+        patrocinio_ids.add(t.patrocinio_id)
+    for v in db.query(BaileVinculo).filter(BaileVinculo.transacao_id == t.id).all():
+        if v.participante_id:
+            participante_ids.add(v.participante_id)
+        if v.patrocinio_id:
+            patrocinio_ids.add(v.patrocinio_id)
+    db.delete(t)
+    db.flush()
+    for pid in participante_ids:
+        p = db.query(EventoParticipante).filter(EventoParticipante.id == pid).first()
+        if p:
+            _recalcular_valor_pago(db, p)
+    for pat_id in patrocinio_ids:
+        pat = db.query(EventoPatrocinio).filter(EventoPatrocinio.id == pat_id).first()
+        if not pat:
+            continue
+        ja = sum(
+            float(v.valor or 0)
+            for v in db.query(BaileVinculo).filter(BaileVinculo.patrocinio_id == pat.id).all()
+        )
+        if pat.valor and ja >= float(pat.valor) - 0.02:
+            pat.pago = "sim"
+        elif ja > 0.02:
+            pat.pago = "a_confirmar"
+        else:
+            pat.pago = "nao"
+            pat.data_pagamento = None
 
 
 @router.post("/{evento_id}/participantes/{participante_id}/pagamento", response_model=PagamentoOut)
@@ -712,15 +766,7 @@ def estornar_pagamento(evento_id: int, tx_id: int, db: Session = Depends(get_db)
     if not tx:
         raise HTTPException(status_code=404, detail="Pagamento nao encontrado")
 
-    participante_id = tx.evento_participante_id
-    db.delete(tx)
-    db.flush()
-
-    if participante_id:
-        p = db.query(EventoParticipante).filter(EventoParticipante.id == participante_id).first()
-        if p:
-            _recalcular_valor_pago(db, p)
-
+    desfazer_efeitos_transacao(db, tx)
     db.commit()
     return {"ok": True}
 

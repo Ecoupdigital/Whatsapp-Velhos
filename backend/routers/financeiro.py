@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
 from models import Transacao, Conta
+from routers.eventos import desfazer_efeitos_transacao
 from schemas import (
     TransacaoCreate, TransacaoUpdate, TransacaoOut,
     BalancoOut, FluxoMensal, ContaSaldo,
@@ -64,7 +65,7 @@ def remover_transacao(transacao_id: int, db: Session = Depends(get_db)):
     t = db.query(Transacao).filter(Transacao.id == transacao_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada")
-    db.delete(t)
+    desfazer_efeitos_transacao(db, t)
     db.commit()
     return {"ok": True}
 
