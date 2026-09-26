@@ -23,7 +23,12 @@ from models import (
     EventoPatrocinio,
     Transacao,
 )
-from routers.eventos import _recalcular_valor_esperado, _recalcular_valor_pago, qtd_venda_efetiva
+from routers.eventos import (
+    _recalcular_valor_esperado,
+    _recalcular_valor_pago,
+    ja_vinculado_patrocinio,
+    qtd_venda_efetiva,
+)
 from services.baile_planilha import PLANILHA_PADRAO, importar_arquivo
 
 router = APIRouter(
@@ -433,22 +438,6 @@ def atualizar_patrocinio(
     return _visao(db, evento)
 
 
-def _ja_vinculado_patrocinio(db: Session, pat: EventoPatrocinio) -> float:
-    partes = db.query(BaileVinculo).filter(BaileVinculo.patrocinio_id == pat.id).all()
-    if partes:
-        return float(sum(v.valor or 0 for v in partes))
-    legado = (
-        db.query(Transacao)
-        .filter(Transacao.patrocinio_id == pat.id, Transacao.tipo == "entrada")
-        .all()
-    )
-    total = 0.0
-    teto = float(pat.valor or 0)
-    for t in legado:
-        total += min(float(t.valor or 0), teto) if teto else float(t.valor or 0)
-    return total
-
-
 @router.post("/{evento_id}/baile/patrocinios/{patrocinio_id}/pagamento")
 def registrar_pagamento_patrocinio(
     evento_id: int,
@@ -467,7 +456,7 @@ def registrar_pagamento_patrocinio(
         raise HTTPException(status_code=404, detail="Patrocinio nao encontrado")
     if data.valor <= 0:
         raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
-    ja = _ja_vinculado_patrocinio(db, pat)
+    ja = ja_vinculado_patrocinio(db, pat)
     falta = round(float(pat.valor or 0) - ja, 2)
     if data.valor > falta + 0.02:
         raise HTTPException(status_code=400, detail=f"Falta R$ {falta:.2f} neste patrocinio")

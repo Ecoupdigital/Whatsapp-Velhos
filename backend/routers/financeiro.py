@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
 from models import Transacao, Conta
-from routers.eventos import desfazer_efeitos_transacao
+from routers.eventos import desfazer_efeitos_transacao, editar_transacao
 from schemas import (
     TransacaoCreate, TransacaoUpdate, TransacaoOut,
     BalancoOut, FluxoMensal, ContaSaldo,
@@ -53,8 +53,7 @@ def atualizar_transacao(transacao_id: int, data: TransacaoUpdate, db: Session = 
     t = db.query(Transacao).filter(Transacao.id == transacao_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada")
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(t, field, value)
+    editar_transacao(db, t, data.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(t)
     return t

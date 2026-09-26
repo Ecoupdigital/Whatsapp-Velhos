@@ -25,7 +25,7 @@ from schemas import (
     EventoCreate, EventoUpdate, EventoOut,
     ParticipanteUpdate, ParticipanteOut,
     ParticipanteAvulsoCreate,
-    PagamentoCreate, PagamentoOut,
+    PagamentoCreate, PagamentoUpdate, PagamentoOut,
     EventoResumo, ResumoItemTipo,
     CartoesUpdate,
     FaixaCreate, FaixaUpdate, FaixaOut,
@@ -640,11 +640,24 @@ def _recalcular_valor_pago(db: Session, p: EventoParticipante):
     p.pago = 1 if p.valor and p.valor_pago >= float(p.valor) - 0.009 else 0
 
 
-def desfazer_efeitos_transacao(db: Session, t: Transacao):
-    """Apaga o lançamento e tira o valor de quem estava vinculado.
+def ja_vinculado_patrocinio(db: Session, pat: EventoPatrocinio) -> float:
+    partes = db.query(BaileVinculo).filter(BaileVinculo.patrocinio_id == pat.id).all()
+    if partes:
+        return float(sum(v.valor or 0 for v in partes))
+    legado = (
+        db.query(Transacao)
+        .filter(Transacao.patrocinio_id == pat.id, Transacao.tipo == "entrada")
+        .all()
+    )
+    total = 0.0
+    teto = float(pat.valor or 0)
+    for t in legado:
+        total += min(float(t.valor or 0), teto) if teto else float(t.valor or 0)
+    return total
 
-    Apagar pelo financeiro não pode deixar o participante com saldo pago fantasma.
-    """
+
+def _ligados_a(db: Session, t: Transacao) -> tuple[set[int], set[int]]:
+    """Participantes e patrocínios que contam este lançamento no pago."""
     participante_ids = set()
     patrocinio_ids = set()
     if t.evento_participante_id:
@@ -656,8 +669,10 @@ def desfazer_efeitos_transacao(db: Session, t: Transacao):
             participante_ids.add(v.participante_id)
         if v.patrocinio_id:
             patrocinio_ids.add(v.patrocinio_id)
-    db.delete(t)
-    db.flush()
+    return participante_ids, patrocinio_ids
+
+
+def _recalcular_ligados(db: Session, participante_ids: set[int], patrocinio_ids: set[int]):
     for pid in participante_ids:
         p = db.query(EventoParticipante).filter(EventoParticipante.id == pid).first()
         if p:
@@ -666,10 +681,7 @@ def desfazer_efeitos_transacao(db: Session, t: Transacao):
         pat = db.query(EventoPatrocinio).filter(EventoPatrocinio.id == pat_id).first()
         if not pat:
             continue
-        ja = sum(
-            float(v.valor or 0)
-            for v in db.query(BaileVinculo).filter(BaileVinculo.patrocinio_id == pat.id).all()
-        )
+        ja = ja_vinculado_patrocinio(db, pat)
         if pat.valor and ja >= float(pat.valor) - 0.02:
             pat.pago = "sim"
         elif ja > 0.02:
@@ -677,6 +689,49 @@ def desfazer_efeitos_transacao(db: Session, t: Transacao):
         else:
             pat.pago = "nao"
             pat.data_pagamento = None
+
+
+def desfazer_efeitos_transacao(db: Session, t: Transacao):
+    """Apaga o lançamento e tira o valor de quem estava vinculado.
+
+    Apagar pelo financeiro não pode deixar o participante com saldo pago fantasma.
+    """
+    participante_ids, patrocinio_ids = _ligados_a(db, t)
+    db.delete(t)
+    db.flush()
+    _recalcular_ligados(db, participante_ids, patrocinio_ids)
+
+
+def editar_transacao(db: Session, t: Transacao, campos: dict):
+    """Muda o lançamento e leva o novo valor pra quem estava vinculado.
+
+    Editar pelo financeiro não pode deixar o evento mostrando o valor antigo.
+    """
+    participante_ids, patrocinio_ids = _ligados_a(db, t)
+    for field, value in campos.items():
+        setattr(t, field, value)
+    if "valor" in campos:
+        novo = float(t.valor or 0)
+        vinculos = db.query(BaileVinculo).filter(BaileVinculo.transacao_id == t.id).all()
+        if len(vinculos) == 1:
+            v = vinculos[0]
+            teto = novo
+            if v.patrocinio_id:
+                pat = db.query(EventoPatrocinio).filter(EventoPatrocinio.id == v.patrocinio_id).first()
+                if pat and pat.valor:
+                    teto = min(novo, float(pat.valor))
+            v.valor = teto
+        elif vinculos and sum(float(v.valor or 0) for v in vinculos) > novo + 0.009:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Esse lancamento esta dividido em {len(vinculos)} partes no baile. "
+                    "Desvincule la antes de baixar o valor."
+                ),
+            )
+    db.flush()
+    novos_part, novos_pat = _ligados_a(db, t)
+    _recalcular_ligados(db, participante_ids | novos_part, patrocinio_ids | novos_pat)
 
 
 @router.post("/{evento_id}/participantes/{participante_id}/pagamento", response_model=PagamentoOut)
@@ -755,6 +810,71 @@ def listar_pagamentos(evento_id: int, db: Session = Depends(get_db)):
         .order_by(Transacao.data.desc(), Transacao.id.desc())
         .all()
     )
+
+
+@router.put("/{evento_id}/pagamentos/{tx_id}", response_model=PagamentoOut)
+def editar_pagamento(evento_id: int, tx_id: int, data: PagamentoUpdate, db: Session = Depends(get_db)):
+    """Corrige um pagamento lançado errado sem precisar estornar e lançar de novo."""
+    tx = db.query(Transacao).filter(
+        Transacao.id == tx_id,
+        Transacao.evento_id == evento_id,
+    ).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Pagamento nao encontrado")
+
+    campos = data.model_dump(exclude_unset=True)
+    forma_pagto = campos.pop("forma_pagto", None)
+    if "valor" in campos:
+        if not campos["valor"] or campos["valor"] <= 0:
+            raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
+        p = None
+        if tx.evento_participante_id:
+            p = (
+                db.query(EventoParticipante)
+                .options(joinedload(EventoParticipante.evento))
+                .filter(EventoParticipante.id == tx.evento_participante_id)
+                .first()
+            )
+        if p:
+            if p.evento:
+                _recalcular_valor_esperado(p, p.evento)
+            outros = (
+                db.query(func.coalesce(func.sum(Transacao.valor), 0.0))
+                .filter(
+                    Transacao.evento_participante_id == p.id,
+                    Transacao.tipo == "entrada",
+                    Transacao.id != tx.id,
+                )
+                .scalar()
+            ) or 0.0
+            limite = round(float(p.valor or 0) - float(outros), 2)
+            if campos["valor"] > limite + 0.02:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Esse pagamento pode ir ate R$ {limite:.2f}.",
+                )
+    if "data" in campos and not campos["data"]:
+        campos.pop("data")
+
+    editar_transacao(db, tx, campos)
+
+    if tx.evento_participante_id:
+        p = db.query(EventoParticipante).filter(EventoParticipante.id == tx.evento_participante_id).first()
+        if p:
+            if "data" in campos:
+                p.data_pagamento = (
+                    db.query(func.max(Transacao.data))
+                    .filter(Transacao.evento_participante_id == p.id, Transacao.tipo == "entrada")
+                    .scalar()
+                )
+            if forma_pagto:
+                p.forma_pagto = forma_pagto
+            if "conta_id" in campos and campos["conta_id"] is not None:
+                p.conta_id = campos["conta_id"]
+
+    db.commit()
+    db.refresh(tx)
+    return tx
 
 
 @router.delete("/{evento_id}/pagamentos/{tx_id}")

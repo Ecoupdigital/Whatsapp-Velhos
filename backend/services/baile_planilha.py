@@ -13,7 +13,7 @@ from openpyxl import load_workbook
 from sqlalchemy.orm import Session
 
 from models import Evento, EventoCartaoFaixa, EventoParticipante, EventoPatrocinio, Jogador
-from routers.eventos import _recalc_recebidos, _recalcular_valor_esperado
+from routers.eventos import _recalc_recebidos, _recalcular_valor_esperado, _recalcular_valor_pago
 
 PLANILHA_PADRAO = Path(
     "/home/vault/05-pessoal/Velhos parceiros/Controle Baile 2026 - Cartoes e Patrocinio - atualizada.xlsx"
@@ -211,7 +211,7 @@ def importar_arquivo(db: Session, evento_id: int, caminho: str | Path) -> dict:
         _garantir_faixa(db, p, inicio, fim)
         p.evento = evento
         _recalcular_valor_esperado(p, evento)
-        p.pago = 1 if p.valor and p.valor_pago and p.valor_pago >= p.valor - 0.009 else 0
+        _recalcular_valor_pago(db, p)
         atletas[_chave_nome(nome)] = p
         # tambem indexa o nome do cadastro, pra patrocinio achar "Seco" -> Marcelo Seco
         if jogador is not None:

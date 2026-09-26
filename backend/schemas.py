@@ -361,6 +361,12 @@ class PagamentoCreate(BaseModel):
     forma_pagto: Optional[str] = None
     conta_id: Optional[int] = None
 
+class PagamentoUpdate(BaseModel):
+    valor: Optional[float] = None
+    data: Optional[str] = None
+    forma_pagto: Optional[str] = None
+    conta_id: Optional[int] = None
+
 class PagamentoOut(BaseModel):
     id: int
     valor: float

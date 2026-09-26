@@ -200,6 +200,7 @@ export default function EventoDetailPage() {
   });
   const [paySaving, setPaySaving] = useState(false);
   const [payReady, setPayReady] = useState(false);
+  const [payEditando, setPayEditando] = useState<PagamentoOut | null>(null);
 
   // Historico expand
   const [expandedParticipanteId, setExpandedParticipanteId] = useState<number | null>(null);
@@ -371,6 +372,7 @@ export default function EventoDetailPage() {
 
   const openPayModal = (part: ParticipanteOut) => {
     setPayReady(false);
+    setPayEditando(null);
     setPayParticipante(part);
     const falta = Math.max(0, (part.valor || 0) - (part.valor_pago || 0));
     const defaultConta = contas.find((c) => c.ativo === 1);
@@ -383,6 +385,19 @@ export default function EventoDetailPage() {
     setPayModalOpen(true);
   };
 
+  const openEditPayModal = (part: ParticipanteOut, pg: PagamentoOut) => {
+    setPayReady(false);
+    setPayEditando(pg);
+    setPayParticipante(part);
+    setPayForm({
+      valor: String(pg.valor),
+      data: pg.data || todayISO(),
+      forma_pagto: pg.forma_pagto || part.forma_pagto || "pix",
+      conta_id: pg.conta_id ? String(pg.conta_id) : "",
+    });
+    setPayModalOpen(true);
+  };
+
   const handleRegistrarPagamento = async () => {
     if (!payParticipante) return;
     const valor = parseFloat(payForm.valor);
@@ -390,23 +405,27 @@ export default function EventoDetailPage() {
       toast.error("Valor invalido");
       return;
     }
+    const body = {
+      valor,
+      data: payForm.data || null,
+      forma_pagto: payForm.forma_pagto || null,
+      conta_id: payForm.conta_id ? parseInt(payForm.conta_id) : null,
+    };
     try {
       setPaySaving(true);
-      await api.post(
-        `/eventos/${eventoId}/participantes/${payParticipante.id}/pagamento`,
-        {
-          valor,
-          data: payForm.data || null,
-          forma_pagto: payForm.forma_pagto || null,
-          conta_id: payForm.conta_id ? parseInt(payForm.conta_id) : null,
-        }
-      );
-      toast.success("Pagamento registrado");
+      if (payEditando) {
+        await api.put(`/eventos/${eventoId}/pagamentos/${payEditando.id}`, body);
+        toast.success("Pagamento corrigido");
+      } else {
+        await api.post(`/eventos/${eventoId}/participantes/${payParticipante.id}/pagamento`, body);
+        toast.success("Pagamento registrado");
+      }
       setPayModalOpen(false);
       setPayParticipante(null);
+      setPayEditando(null);
       fetchAll();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Erro ao registrar pagamento");
+      toast.error(err instanceof Error ? err.message : "Erro ao salvar pagamento");
     } finally {
       setPaySaving(false);
     }
@@ -1030,6 +1049,9 @@ export default function EventoDetailPage() {
                               {pg.forma_pagto && <span className="text-txt-tertiary uppercase">{pg.forma_pagto}</span>}
                               {contaNome(pg.conta_id) && <span className="text-txt-secondary">{contaNome(pg.conta_id)}</span>}
                               <div className="flex-1" />
+                              <button onClick={() => openEditPayModal(p, pg)} className="text-txt-tertiary hover:text-txt-primary" title="Editar">
+                                <Pencil size={12} />
+                              </button>
                               <button onClick={() => handleEstornar(pg.id)} className="text-txt-tertiary hover:text-red-400" title="Estornar">
                                 <RotateCcw size={12} />
                               </button>
@@ -1106,10 +1128,18 @@ export default function EventoDetailPage() {
       {/* ── Pagamento Modal ──────────────────────────────────── */}
       <Modal open={payModalOpen} onClose={() => setPayModalOpen(false)} size="sm">
         <ModalHeader>
-          Registrar Pagamento - {payParticipante ? nomeParticipante(payParticipante) : ""}
+          {payEditando ? "Editar Pagamento" : "Registrar Pagamento"} -{" "}
+          {payParticipante ? nomeParticipante(payParticipante) : ""}
         </ModalHeader>
         <ModalBody className="space-y-3">
-          {payParticipante && (
+          {payParticipante && payEditando && (
+            <div className="text-xs text-txt-tertiary font-body">
+              Lancado: {formatCurrency(payEditando.valor)}. Sem ele, pago{" "}
+              {formatCurrency(Math.max(0, (payParticipante.valor_pago || 0) - payEditando.valor))} de{" "}
+              {formatCurrency(payParticipante.valor || 0)}. O lancamento no financeiro muda junto.
+            </div>
+          )}
+          {payParticipante && !payEditando && (
             <div className="text-xs text-txt-tertiary font-body">
               Pago: {formatCurrency(payParticipante.valor_pago || 0)} de{" "}
               {formatCurrency(payParticipante.valor || 0)} - falta{" "}
@@ -1156,7 +1186,7 @@ export default function EventoDetailPage() {
             Cancelar
           </Button>
           <Button type="button" loading={paySaving} disabled={!payReady} onClick={handleRegistrarPagamento}>
-            Registrar
+            {payEditando ? "Salvar" : "Registrar"}
           </Button>
         </ModalFooter>
       </Modal>
