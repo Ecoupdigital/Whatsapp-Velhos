@@ -190,6 +190,8 @@ class TransacaoOut(BaseModel):
     evento_participante_id: Optional[int] = None
     comprovante: Optional[str]
     created_at: Optional[str]
+    origem: Optional[str] = None  # app | agente | importacao (NULL = anterior a coluna)
+    importacao_lote_id: Optional[int] = None
 
     class Config:
         from_attributes = True

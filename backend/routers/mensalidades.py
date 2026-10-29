@@ -13,6 +13,7 @@ from schemas import (
 from auth import get_current_user
 from services.whatsapp_service import send_text_message
 from services.template_service import render_template, mes_por_extenso
+from services.mensalidade_service import sincronizar_transacao_mensalidade
 from datetime import datetime
 from typing import Optional
 
@@ -112,44 +113,9 @@ def atualizar(mensalidade_id: int, data: MensalidadeUpdate, db: Session = Depend
     for field, value in payload.items():
         setattr(m, field, value)
 
-    # Se marcou como pago, sincroniza transacao financeira (uma por mensalidade)
-    if m.status == "pago" and m.valor_pago:
-        jogador = db.query(Jogador).filter(Jogador.id == m.jogador_id).first()
-        nome = jogador.apelido or jogador.nome if jogador else "Desconhecido"
-        descricao = f"Mensalidade {m.mes_referencia} - {nome}"
-        data_tx = m.data_pagamento or datetime.now().strftime("%Y-%m-%d")
-
-        existing_tx = (
-            db.query(Transacao)
-            .filter(Transacao.mensalidade_id == m.id)
-            .first()
-        )
-        if existing_tx:
-            existing_tx.valor = m.valor_pago
-            existing_tx.data = data_tx
-            existing_tx.descricao = descricao
-            existing_tx.conta_id = m.conta_id
-            existing_tx.jogador_id = m.jogador_id
-        else:
-            db.add(Transacao(
-                tipo="entrada",
-                categoria="mensalidade",
-                descricao=descricao,
-                valor=m.valor_pago,
-                data=data_tx,
-                jogador_id=m.jogador_id,
-                conta_id=m.conta_id,
-                mensalidade_id=m.id,
-            ))
-    elif m.status != "pago":
-        # Status mudou de pago pra outro: remove transacao associada (estorno)
-        existing_tx = (
-            db.query(Transacao)
-            .filter(Transacao.mensalidade_id == m.id)
-            .first()
-        )
-        if existing_tx:
-            db.delete(existing_tx)
+    # Se marcou como pago, sincroniza transacao financeira (uma por mensalidade);
+    # se saiu de pago, estorna. Mesma regra da importacao de extrato.
+    sincronizar_transacao_mensalidade(db, m)
 
     db.commit()
     db.refresh(m)

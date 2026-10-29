@@ -111,12 +111,25 @@ def _add_colunas_baile(engine):
     ])
 
 
+def _add_colunas_origem(engine):
+    """Origem dos lancamentos (app | agente | importacao) e lote da importacao de extrato.
+
+    Tabelas novas (api_keys, importacoes_extrato, extrato_linhas) saem do create_all.
+    """
+    _add_columns(engine, "transacoes", [
+        ("origem", "TEXT"),
+        ("importacao_lote_id", "INTEGER"),
+    ])
+
+
 def run_additive_migrations(engine):
     """Ponto de entrada chamado no boot apos Base.metadata.create_all.
 
-    Ordem: (1) ADD COLUMN tipos_item, (2) backfill de faixas, (3) colunas do baile.
+    Ordem: (1) ADD COLUMN tipos_item, (2) colunas do baile, (3) origem dos lancamentos,
+    (4) backfill de faixas.
     Seguro rodar N vezes (idempotente).
     """
     _add_column_tipos_item(engine)
     _add_colunas_baile(engine)
+    _add_colunas_origem(engine)
     _backfill_faixas(engine)
