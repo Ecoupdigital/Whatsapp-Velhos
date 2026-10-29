@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Text, Float, ForeignKey, Index
+from sqlalchemy import Column, Integer, Text, Float, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -88,6 +88,10 @@ class Transacao(Base):
     patrocinio_id = Column(Integer, ForeignKey("evento_patrocinios.id", ondelete="SET NULL"))
     comprovante = Column(Text)
     created_at = Column(Text, default=lambda: datetime.now().isoformat())
+    # Quem lancou: app (tela) | agente (chave de servico) | importacao (extrato).
+    # NULL = lancamento anterior a esta coluna (feito pelo app).
+    origem = Column(Text)
+    importacao_lote_id = Column(Integer, ForeignKey("importacoes_extrato.id", ondelete="SET NULL"))
 
 
 class Evento(Base):
@@ -383,3 +387,52 @@ class EventoParticipanteItem(Base):
     qtd_pedido = Column(Integer, default=0)
 
     participante = relationship("EventoParticipante", back_populates="itens")
+
+
+class ApiKey(Base):
+    """Chave de servico de longa duracao (agente do OpenBot). Guarda so o hash."""
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(Text, nullable=False)
+    prefixo = Column(Text, nullable=False)  # parte publica, para identificar a chave
+    key_hash = Column(Text, nullable=False, unique=True)  # sha256 da chave inteira
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)  # age em nome deste usuario
+    created_at = Column(Text, default=lambda: datetime.now().isoformat())
+    ultimo_uso_em = Column(Text)
+    revogada_em = Column(Text)
+
+
+class ImportacaoExtrato(Base):
+    """Lote de importacao de extrato bancario. Desfazer apaga o que o lote lancou."""
+    __tablename__ = "importacoes_extrato"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"))
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    origem = Column(Text, nullable=False, default="agente")  # app | agente
+    observacao = Column(Text)
+    total_linhas = Column(Integer, default=0)
+    linhas_gravadas = Column(Integer, default=0)
+    status = Column(Text, nullable=False, default="confirmado")  # confirmado | desfeito
+    created_at = Column(Text, default=lambda: datetime.now().isoformat())
+    desfeito_em = Column(Text)
+
+
+class ExtratoLinha(Base):
+    """Linha de extrato ja importada. impressao_digital unica impede importar duas vezes."""
+    __tablename__ = "extrato_linhas"
+    __table_args__ = (UniqueConstraint("impressao_digital", name="uq_extrato_linhas_impressao"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lote_id = Column(Integer, ForeignKey("importacoes_extrato.id", ondelete="CASCADE"), nullable=False)
+    conta_id = Column(Integer, ForeignKey("contas.id"))
+    data = Column(Text, nullable=False)
+    tipo = Column(Text, nullable=False)  # entrada | saida
+    valor = Column(Float, nullable=False)
+    descricao = Column(Text)
+    impressao_digital = Column(Text, nullable=False)
+    acao = Column(Text, nullable=False)  # mensalidade | transacao
+    transacao_ids = Column(Text)  # JSON: transacoes criadas por esta linha
+    mensalidades_anteriores = Column(Text)  # JSON: estado das mensalidades antes de quitar (para desfazer)
+    created_at = Column(Text, default=lambda: datetime.now().isoformat())
